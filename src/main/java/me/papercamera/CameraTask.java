@@ -42,11 +42,12 @@ public class CameraTask implements Runnable {
     private static final double OCCLUSION_LERP = 0.25; // speed of occlusion push/pull
 
     // --- Occlusion debounce: prevent flickering from brief obstacles ---
-    private static final int PUSH_THRESHOLD = 8;    // ticks of continuous push before moving
-    private static final int RETREAT_THRESHOLD = 12; // ticks of clear view before pulling back
+    private static final int PUSH_THRESHOLD = 20;    // ticks of continuous push before moving (1s)
+    private static final int RETREAT_THRESHOLD = 30; // ticks of clear view before pulling back (1.5s)
     private int pushTicks;    // consecutive ticks where occlusionTarget is closer than idealPos
     private int retreatTicks; // consecutive ticks where occlusionTarget returned to idealPos
     private Location debouncedTarget; // the actual target we lerp toward (only changes after threshold)
+    private boolean pushLocked; // true = we've committed to a push, don't update debouncedTarget
 
     // --- Direction smoothing (yaw/pitch) ---
     private float smoothedYaw;
@@ -166,13 +167,11 @@ public class CameraTask implements Runnable {
         Location rawTarget = adjustForOcclusion(idealPos, targetEye, world);
 
         // --- Debounced occlusion: don't react to brief obstacles ---
-        // rawTarget may flicker between idealPos (no obstacle) and pushedPos (obstacle).
-        // We use debouncedTarget to smooth this — it only changes after pushTicks or retreatTicks
-        // cross their respective thresholds.
         if (debouncedTarget == null || !debouncedTarget.getWorld().equals(world)) {
             debouncedTarget = rawTarget.clone();
             pushTicks = 0;
             retreatTicks = 0;
+            pushLocked = false;
         }
 
         double rawDist = rawTarget.distance(targetEye);
@@ -182,17 +181,19 @@ public class CameraTask implements Runnable {
         if (isPushed) {
             pushTicks++;
             retreatTicks = 0;
-            if (pushTicks >= PUSH_THRESHOLD) {
-                // Obstacle persisted long enough — move toward rawTarget
+            if (pushTicks >= PUSH_THRESHOLD && !pushLocked) {
+                // Obstacle persisted long enough — commit to the pushed position once
                 debouncedTarget = rawTarget.clone();
+                pushLocked = true;
             }
-            // else: below threshold, keep debouncedTarget unchanged (no reaction)
+            // else: below threshold or already locked, keep debouncedTarget unchanged
         } else {
             retreatTicks++;
             pushTicks = 0;
             if (retreatTicks >= RETREAT_THRESHOLD) {
-                // Clear view persisted long enough — move back to idealPos
+                // Clear view persisted long enough — return to idealPos
                 debouncedTarget = rawTarget.clone();
+                pushLocked = false;
             }
             // else: below threshold, keep debouncedTarget unchanged (no reaction)
         }
@@ -330,7 +331,6 @@ public class CameraTask implements Runnable {
         for (int iter = 0; iter < maxIterations; iter++) {
             double distToTarget = testPos.distance(targetEye);
             if (distToTarget < 0.01) return testPos;
-
             if (distToTarget < minDist) break;
 
             Vector direction = targetEye.toVector().subtract(testPos.toVector()).normalize();
@@ -341,6 +341,7 @@ public class CameraTask implements Runnable {
             );
 
             if (result == null || result.getHitBlock() == null) {
+                // Clear view from this position
                 if (distToTarget > maxDist) {
                     return targetEye.clone().add(direction.clone().multiply(-maxDist));
                 }
@@ -352,69 +353,33 @@ public class CameraTask implements Runnable {
 
             if (hitDist < minDist) break;
 
-            // --- Try raising camera to go over low obstacles ---
-            // If the hit block is below the camera's current height, try raising Y
-            if (hitPos.getY() < testPos.getY() - 0.5) {
-                for (int raise = 1; raise <= 3; raise++) {
+            // --- Try raising camera to go over the obstacle ---
+            // Trigger if the hit block is at or below camera height
+            if (hitPos.getY() <= testPos.getY() + 0.5) {
+                for (int raise = 1; raise <= 6; raise++) {
                     Location raisedPos = testPos.clone();
                     raisedPos.setY(testPos.getY() + raise);
-                    if (raisedPos.getY() > targetEye.getY() + 10.0) break; // don't go too high
+                    if (raisedPos.getY() > targetEye.getY() + 12.0) break;
+
+                    // Recalculate direction from the raised position
+                    Vector raisedDir = targetEye.toVector().subtract(raisedPos.toVector()).normalize();
+                    double raisedDist = raisedPos.distance(targetEye);
 
                     RayTraceResult raisedResult = world.rayTraceBlocks(
-                            raisedPos, direction, raisedPos.distance(targetEye),
+                            raisedPos, raisedDir, raisedDist,
                             FluidCollisionMode.NEVER, true
                     );
                     if (raisedResult == null || raisedResult.getHitBlock() == null) {
-                        // Raised position has clear view — use it
                         return raisedPos;
                     }
                 }
             }
 
+            // Push forward past the hit block
             testPos = hitPos.clone().add(direction.clone().multiply(0.5));
         }
 
-        // --- Fallback: try angled positions, pick the one closest to idealPos ---
-        Location bestFallback = null;
-        double bestDist = Double.MAX_VALUE;
-
-        for (int i = 1; i <= 4; i++) {
-            double testAngle = orbitAngle + (Math.PI / 2.0) * i;
-            double r = config.getOrbitRadius();
-            double altX = orbitCenter.getX() + r * Math.cos(testAngle);
-            double altY = orbitCenter.getY() + config.getOrbitHeight();
-            double altZ = orbitCenter.getZ() + r * Math.sin(testAngle);
-
-            Location altPos = new Location(world, altX, altY, altZ);
-
-            double hDist = horizontalDistance(altPos, targetEye);
-            if (hDist < minDist) {
-                Vector pushDir = new Vector(altPos.getX() - targetEye.getX(), 0, altPos.getZ() - targetEye.getZ()).normalize();
-                altPos.setX(targetEye.getX() + pushDir.getX() * minDist);
-                altPos.setZ(targetEye.getZ() + pushDir.getZ() * minDist);
-            }
-
-            Vector altDir = targetEye.toVector().subtract(altPos.toVector()).normalize();
-            double altDist = altPos.distance(targetEye);
-
-            RayTraceResult altResult = world.rayTraceBlocks(
-                    altPos, altDir, altDist, FluidCollisionMode.NEVER, true);
-            if (altResult == null || altResult.getHitBlock() == null) {
-                if (altDist > maxDist)
-                    altPos = targetEye.clone().add(altDir.clone().multiply(-maxDist));
-
-                double distToIdeal = altPos.distance(idealPos);
-                if (distToIdeal < bestDist) {
-                    bestDist = distToIdeal;
-                    bestFallback = altPos.clone();
-                }
-            }
-        }
-
-        if (bestFallback != null) {
-            return bestFallback;
-        }
-
+        // No working position found — return the last pushed position (closest we could get)
         return testPos;
     }
 
@@ -522,6 +487,7 @@ public class CameraTask implements Runnable {
         directionInitialized = false;
         pushTicks = 0;
         retreatTicks = 0;
+        pushLocked = false;
         debouncedTarget = null;
 
         int minTicks = config.getMinDuration() * 20;
