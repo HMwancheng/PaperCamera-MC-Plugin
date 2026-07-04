@@ -133,6 +133,7 @@ public class CameraCommand implements CommandExecutor, TabCompleter {
     private void handleReload(CommandSender sender) {
         config.load();
         cameraManager.getTargetManager().loadSpawnTargets();
+        cameraManager.resetSpawnDiscovery();
 
         // Restart the camera task if running so new config values take effect
         if (cameraManager.isRunning()) {
@@ -172,6 +173,7 @@ public class CameraCommand implements CommandExecutor, TabCompleter {
 
         sender.sendMessage(Component.text("Discovering spawn points using command: /" + spawnCmd + " <world>", NamedTextColor.GREEN));
         cameraManager.discoverSpawnPoints();
+        cameraManager.markSpawnDiscovered(); // mark as done so start() won't re-discover
     }
 
     private void sendUsage(CommandSender sender) {

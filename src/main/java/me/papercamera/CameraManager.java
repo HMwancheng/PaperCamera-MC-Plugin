@@ -28,6 +28,7 @@ public class CameraManager {
     private CameraTask cameraTask;
     private BukkitTask bukkitTask;
     private boolean running = false;
+    private boolean spawnPointsDiscovered = false;
 
     public CameraManager(JavaPlugin plugin, CameraConfig config) {
         this.plugin = plugin;
@@ -37,8 +38,16 @@ public class CameraManager {
 
     /**
      * Start the camera system. Returns false if camera player is not online.
+     * If spawn-command is configured and not yet discovered, discovers spawn points first.
      */
     public boolean start() {
+        return start(false);
+    }
+
+    /**
+     * Start the camera system, optionally skipping spawn point discovery.
+     */
+    private boolean start(boolean skipDiscover) {
         if (running) return false;
 
         Player camera = getCameraPlayer();
@@ -46,6 +55,25 @@ public class CameraManager {
             plugin.getLogger().warning("Cannot start: camera player '" + config.getCameraPlayerName() + "' is not online!");
             return false;
         }
+
+        // Auto-discover spawn points before starting (only once, only if spawn-command is set)
+        String spawnCmd = config.getSpawnCommand();
+        if (!skipDiscover && !spawnPointsDiscovered && spawnCmd != null && !spawnCmd.isEmpty()) {
+            plugin.getLogger().info("Auto-discovering spawn points before start...");
+            discoverSpawnPoints(() -> {
+                spawnPointsDiscovered = true;
+                doStart();
+            });
+            return true;
+        }
+
+        doStart();
+        return true;
+    }
+
+    private void doStart() {
+        Player camera = getCameraPlayer();
+        if (camera == null) return;
 
         // Ensure camera is in spectator mode
         if (camera.getGameMode() != GameMode.SPECTATOR) {
@@ -56,7 +84,6 @@ public class CameraManager {
         bukkitTask = Bukkit.getScheduler().runTaskTimer(plugin, cameraTask, 0L, 1L);
         running = true;
         plugin.getLogger().info("Camera system started!");
-        return true;
     }
 
     /**
@@ -77,6 +104,20 @@ public class CameraManager {
 
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * Reset the spawn discovery flag so the next start() will re-discover.
+     */
+    public void resetSpawnDiscovery() {
+        spawnPointsDiscovered = false;
+    }
+
+    /**
+     * Mark spawn points as discovered (call after manual discoverspawn).
+     */
+    public void markSpawnDiscovered() {
+        spawnPointsDiscovered = true;
     }
 
     /**
@@ -113,21 +154,34 @@ public class CameraManager {
     /**
      * Discover spawn points by executing the configured spawn command for each idle world.
      * The camera will be teleported via the command, and the resulting location is recorded.
+     * Runs the callback on completion (null-safe).
      */
     public void discoverSpawnPoints() {
+        discoverSpawnPoints(null);
+    }
+
+    /**
+     * Discover spawn points with a callback that runs after all worlds are processed.
+     */
+    public void discoverSpawnPoints(Runnable onComplete) {
         String spawnCmd = config.getSpawnCommand();
         if (spawnCmd == null || spawnCmd.isEmpty()) {
+            if (onComplete != null) onComplete.run();
             return;
         }
 
         Player camera = getCameraPlayer();
         if (camera == null) {
             plugin.getLogger().warning("Cannot discover spawn points: camera player is offline.");
+            if (onComplete != null) onComplete.run();
             return;
         }
 
         Iterator<String> worldIter = config.getIdleWorlds().iterator();
-        if (!worldIter.hasNext()) return;
+        if (!worldIter.hasNext()) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
 
         new BukkitRunnable() {
             @Override
@@ -136,6 +190,7 @@ public class CameraManager {
                     plugin.getLogger().info("Spawn point discovery complete!");
                     targetManager.loadSpawnTargets();
                     cancel();
+                    if (onComplete != null) onComplete.run();
                     return;
                 }
 
@@ -173,6 +228,7 @@ public class CameraManager {
         player.setGameMode(GameMode.SPECTATOR);
 
         if (config.isAutoStart() && !running) {
+            // Will auto-discover spawn points before starting if needed
             start();
         }
     }
