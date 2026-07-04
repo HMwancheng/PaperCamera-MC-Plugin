@@ -3,12 +3,17 @@ package me.papercamera;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.*;
 import java.util.*;
 
 public class CameraConfig {
+
+    private static final int CURRENT_CONFIG_VERSION = 2;
 
     private final JavaPlugin plugin;
 
@@ -27,6 +32,7 @@ public class CameraConfig {
     private double transitionLerp;
     private boolean cameraSmoothingEnabled;
     private double cameraSmoothingLerp;
+    private double directionLerpFactor;
     private List<String> idleWorlds;
     private String spawnCommand;
     private final Map<String, Location> spawnPoints = new LinkedHashMap<>();
@@ -39,6 +45,15 @@ public class CameraConfig {
     public void load() {
         plugin.reloadConfig();
         FileConfiguration cfg = plugin.getConfig();
+
+        // --- Config migration: merge new keys from default config ---
+        int userVersion = cfg.getInt("config-version", 0);
+        if (userVersion < CURRENT_CONFIG_VERSION) {
+            mergeNewConfigKeys();
+            plugin.reloadConfig();
+            cfg = plugin.getConfig();
+            plugin.getLogger().info("Config migrated from version " + userVersion + " to " + CURRENT_CONFIG_VERSION);
+        }
 
         cameraPlayerName = cfg.getString("camera-player-name", "camera");
         autoStart = cfg.getBoolean("auto-start", true);
@@ -55,6 +70,7 @@ public class CameraConfig {
         transitionLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("occlusion.transition-lerp", 0.15)));
         cameraSmoothingEnabled = cfg.getBoolean("camera-smoothing.enabled", true);
         cameraSmoothingLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.lerp-factor", 0.35)));
+        directionLerpFactor = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.direction-lerp-factor", 0.20)));
         idleWorlds = cfg.getStringList("idle-worlds");
         spawnCommand = cfg.getString("spawn-command", "");
 
@@ -98,6 +114,56 @@ public class CameraConfig {
         plugin.getLogger().info("Loaded " + spawnPoints.size() + " spawn points across " + idleWorlds.size() + " configured worlds.");
     }
 
+    /**
+     * Merge new keys from the default config (inside the jar) into the user's existing config.yml.
+     * Existing user values are preserved; only missing keys are added.
+     * Then the config-version is updated to the current version.
+     */
+    private void mergeNewConfigKeys() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) return;
+
+        try (InputStream defaultStream = plugin.getResource("config.yml")) {
+            if (defaultStream == null) return;
+
+            YamlConfiguration defaultCfg = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultStream));
+            YamlConfiguration userCfg = YamlConfiguration.loadConfiguration(configFile);
+
+            boolean changed = false;
+            changed |= mergeSection(userCfg, defaultCfg);
+
+            // Update the version
+            userCfg.set("config-version", CURRENT_CONFIG_VERSION);
+            changed = true;
+
+            if (changed) {
+                userCfg.save(configFile);
+                plugin.getLogger().info("config.yml has been updated with new options.");
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to merge config: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Recursively merge default keys into user config.
+     */
+    private boolean mergeSection(ConfigurationSection user, ConfigurationSection defaults) {
+        boolean changed = false;
+        for (String key : defaults.getKeys(false)) {
+            if (!user.contains(key)) {
+                // Key doesn't exist in user config — add it
+                user.set(key, defaults.get(key));
+                changed = true;
+            } else if (defaults.isConfigurationSection(key) && user.isConfigurationSection(key)) {
+                // Both are sections — recurse
+                changed |= mergeSection(user.getConfigurationSection(key), defaults.getConfigurationSection(key));
+            }
+            // If key exists in user but is a different type, keep user's value (don't overwrite)
+        }
+        return changed;
+    }
+
     /** Check if a player name matches the camera player name (case-insensitive). */
     public boolean isCameraPlayer(String playerName) {
         return playerName.equalsIgnoreCase(cameraPlayerName);
@@ -118,6 +184,7 @@ public class CameraConfig {
     public double getTransitionLerp() { return transitionLerp; }
     public boolean isCameraSmoothingEnabled() { return cameraSmoothingEnabled; }
     public double getCameraSmoothingLerp() { return cameraSmoothingLerp; }
+    public double getDirectionLerpFactor() { return directionLerpFactor; }
     public List<String> getIdleWorlds() { return idleWorlds; }
     public String getSpawnCommand() { return spawnCommand; }
     public Map<String, Location> getSpawnPoints() { return spawnPoints; }

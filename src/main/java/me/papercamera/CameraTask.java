@@ -37,6 +37,11 @@ public class CameraTask implements Runnable {
     // --- Camera smoothing (second-layer lerp) ---
     private Location cameraPos;
 
+    // --- Direction smoothing (yaw/pitch) ---
+    private float smoothedYaw;
+    private float smoothedPitch;
+    private boolean directionInitialized;
+
     // --- Occlusion state machine ---
     private int occlusionTicks;
     private boolean isTransitioning;
@@ -390,16 +395,41 @@ public class CameraTask implements Runnable {
         double y = toTarget.getY();
         double z = toTarget.getZ();
         double horizontalDist = Math.sqrt(x * x + z * z);
-        double pitch = Math.toDegrees(-Math.atan2(y, horizontalDist));
+        double targetPitch = Math.toDegrees(-Math.atan2(y, horizontalDist));
+        double targetYaw;
 
-        if (Math.abs(pitch) > 80.0) {
-            cameraPos.setYaw(lastStableYaw);
+        if (Math.abs(targetPitch) > 80.0) {
+            // Nearly vertical — lock yaw to last stable value
+            targetYaw = lastStableYaw;
         } else {
-            double yaw = Math.toDegrees(Math.atan2(-x, z));
-            lastStableYaw = (float) yaw;
-            cameraPos.setYaw((float) yaw);
+            targetYaw = Math.toDegrees(Math.atan2(-x, z));
+            lastStableYaw = (float) targetYaw;
         }
-        cameraPos.setPitch((float) pitch);
+
+        // --- Smooth yaw/pitch to avoid jumpy head movement ---
+        if (!directionInitialized) {
+            smoothedYaw = (float) targetYaw;
+            smoothedPitch = (float) targetPitch;
+            directionInitialized = true;
+        } else {
+            double factor = config.getDirectionLerpFactor();
+            smoothedYaw = lerpYaw(smoothedYaw, (float) targetYaw, factor);
+            smoothedPitch = (float) (smoothedPitch + (targetPitch - smoothedPitch) * factor);
+        }
+
+        cameraPos.setYaw(smoothedYaw);
+        cameraPos.setPitch(smoothedPitch);
+    }
+
+    /**
+     * Lerp between two yaw angles, handling the 360° wrap correctly.
+     */
+    private float lerpYaw(float from, float to, double factor) {
+        float diff = to - from;
+        // Normalize to [-180, 180]
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        return from + (float) (diff * factor);
     }
 
     // ==================== Target Switching ====================
@@ -429,6 +459,7 @@ public class CameraTask implements Runnable {
         occlusionTicks = 0;
         isTransitioning = false;
         transitionTarget = null;
+        directionInitialized = false;
 
         int minTicks = config.getMinDuration() * 20;
         int maxTicks = config.getMaxDuration() * 20;

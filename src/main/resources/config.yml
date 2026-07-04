@@ -1,5 +1,9 @@
 # PaperCamera 配置文件
 # 通过 /camera reload 热重载
+# 更新插件时新增的配置项会自动合并，无需手动删除再生成
+
+# 配置文件版本（自动管理，请勿手动修改）
+config-version: 2
 
 # 摄像机玩家名称（需要提前登录到服务器）
 camera-player-name: "camera"
@@ -27,10 +31,11 @@ occlusion:
   timeout-ticks: 40  # 短暂遮挡容忍时间（tick），超过后启动恢复（40=2秒）
   transition-lerp: 0.15  # 遮挡恢复时摄像机移动的 lerp 速度（越大越快）
 
-# 摄像机平滑设置（第二层平滑，客户端看起来更流畅）
+# 摄像机平滑设置（让客户端看起来更流畅）
 camera-smoothing:
   enabled: true
   lerp-factor: 0.35  # 摄像机实际位置跟随理想位置的速度（0.0-1.0）
+  direction-lerp-factor: 0.20  # 视角（yaw/pitch）平滑速度，越小越平滑（0.0-1.0），用于过滤跳跃等快速移动
 
 # 摄像机可操作的世界（只在这些世界活动，不进入下界/末地）
 idle-worlds:
