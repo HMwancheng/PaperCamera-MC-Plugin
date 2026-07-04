@@ -1,0 +1,51 @@
+# PaperCamera Configuration
+
+# The name of the camera player account
+camera-player-name: "camera"
+
+# Auto-start camera when camera player joins
+auto-start: true
+
+# Orbit settings
+orbit:
+  radius: 8.0       # Distance from target
+  height: 2.5       # Height above target
+  speed: 0.03       # Radians per tick (higher = faster orbit)
+
+# Follow settings
+follow:
+  min-duration: 15     # Minimum seconds per target
+  max-duration: 30     # Maximum seconds per target
+  lerp-factor: 0.05    # How fast camera center follows target (0.0-1.0)
+  max-move-per-tick: 0.5  # Maximum blocks the orbit center can move per tick
+
+# Occlusion settings
+occlusion:
+  min-distance: 5.0  # Minimum distance from camera to target
+  max-distance: 32.0 # Maximum distance (2 chunks = 32 blocks)
+
+# Worlds for camera operation (only overworld-type worlds)
+# Camera will NOT enter nether/end
+idle-worlds:
+  - "world"
+  - "world2"
+  - "world3"
+
+# Spawn points for each world (used when no players online, or as main-city targets)
+# Camera will orbit at these coordinates
+spawn-points:
+  world:
+    world: "world"
+    x: 0.0
+    y: 64.0
+    z: 0.0
+  world2:
+    world: "world2"
+    x: 0.0
+    y: 64.0
+    z: 0.0
+  world3:
+    world: "world3"
+    x: 0.0
+    y: 64.0
+    z: 0.0

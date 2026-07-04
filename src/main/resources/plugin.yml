@@ -1,0 +1,14 @@
+name: PaperCamera
+version: '${version}'
+main: me.papercamera.PaperCameraPlugin
+api-version: '1.21'
+description: A camera system using a spectator account to orbit around players and locations
+commands:
+  camera:
+    description: Control the camera system
+    usage: /<command> <start|stop|status|reload|skip>
+    permission: papercamera.admin
+permissions:
+  papercamera.admin:
+    description: Allows controlling the camera system
+    default: op
