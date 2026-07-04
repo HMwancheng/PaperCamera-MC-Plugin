@@ -251,7 +251,7 @@ public class CameraManager {
             if (delaySeconds > 0) {
                 plugin.getLogger().info("Camera player joined. Waiting " + delaySeconds
                         + "s for world loading before starting...");
-                Bukkit.getScheduler().runTaskLater(plugin, this::start, delaySeconds * 20L);
+                Bukkit.getScheduler().runTaskLater(plugin, (Runnable) this::start, delaySeconds * 20L);
             } else {
                 start();
             }
