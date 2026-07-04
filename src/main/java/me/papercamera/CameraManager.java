@@ -4,12 +4,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -153,6 +157,8 @@ public class CameraManager {
                                     + "': " + loc.getWorld().getName()
                                     + " (" + (int) loc.getX() + ", " + (int) loc.getY() + ", " + (int) loc.getZ() + ")");
                         }
+                        // Persist discovered spawn points to config.yml
+                        saveSpawnPointsToConfig();
                         targetManager.loadSpawnTargets();
                     }
                 }.runTaskLater(plugin, 10L); // wait 10 ticks (0.5s) for teleport to complete
@@ -232,6 +238,29 @@ public class CameraManager {
         int cz = location.getBlockZ() >> 4;
         if (!world.isChunkLoaded(cx, cz)) {
             world.getChunkAt(cx, cz); // synchronous load
+        }
+    }
+
+    /**
+     * Persist discovered spawn points to the config.yml file.
+     */
+    private void saveSpawnPointsToConfig() {
+        File configFile = new File(plugin.getDataFolder(), "config.yml");
+        FileConfiguration cfg = plugin.getConfig();
+
+        for (Map.Entry<String, Location> entry : config.getSpawnPoints().entrySet()) {
+            String key = entry.getKey();
+            Location loc = entry.getValue();
+            cfg.set("spawn-points." + key + ".world", loc.getWorld().getName());
+            cfg.set("spawn-points." + key + ".x", loc.getX());
+            cfg.set("spawn-points." + key + ".y", loc.getY());
+            cfg.set("spawn-points." + key + ".z", loc.getZ());
+        }
+
+        try {
+            cfg.save(configFile);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to save spawn points to config: " + e.getMessage());
         }
     }
 

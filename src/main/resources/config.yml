@@ -3,7 +3,7 @@
 # 更新插件时新增的配置项会自动合并，无需手动删除再生成
 
 # 配置文件版本（自动管理，请勿手动修改）
-config-version: 2
+config-version: 3
 
 # 摄像机玩家名称（需要提前登录到服务器）
 camera-player-name: "camera"
@@ -21,8 +21,8 @@ orbit:
 follow:
   min-duration: 15     # 每个目标最少停留秒数
   max-duration: 30     # 每个目标最多停留秒数
-  lerp-factor: 0.05    # 摄像机中心跟随目标的速度（0.0-1.0，越大越快）
-  max-move-per-tick: 0.25  # 每 tick 摄像机中心最大移动格数（速度上限）
+  lerp-factor: 0.03    # 摄像机中心跟随目标的速度（0.0-1.0，越小越平滑）
+  max-move-per-tick: 0.15  # 每 tick 摄像机中心最大移动格数（速度上限）
 
 # 遮挡检测设置
 occlusion:
@@ -34,14 +34,21 @@ occlusion:
 # 摄像机平滑设置（让客户端看起来更流畅）
 camera-smoothing:
   enabled: true
-  lerp-factor: 0.35  # 摄像机实际位置跟随理想位置的速度（0.0-1.0）
-  direction-lerp-factor: 0.20  # 视角（yaw/pitch）平滑速度，越小越平滑（0.0-1.0），用于过滤跳跃等快速移动
+  lerp-factor: 0.22  # 摄像机实际位置跟随理想位置的速度（0.0-1.0，越小越平滑）
+  direction-lerp-factor: 0.10  # 视角（yaw/pitch）平滑速度，越小越平滑（0.0-1.0），用于过滤跳跃等快速移动
 
 # 出生点世界列表（只在这些世界生成出生点/主城用于无人时环绕）
 # 配置后，spawn-points 中非此列表的世界会被自动跳过
 # 摄像机可以跟随玩家进入任何世界（包括下界/末地），不受此列表限制
+# /camera discoverspawn 会从此列表读取世界名来执行 spawn-command
 idle-worlds:
   - "world"
+
+# 主世界名（用于无人时优先展示，默认使用 idle-worlds 第一个）
+# 有玩家在线时，非主世界的出生点出现频率 = spawn-weight（0.0-1.0）
+# 设为 0.0 在有玩家时完全不展示非主世界出生点，设为 1.0 则等概率
+primary-world: ""
+spawn-weight: 0.2
 
 # 出生点发现命令（可选）
 # 如果设置了此命令，插件会执行 "{命令前缀} {世界名}" 来传送到各世界的出生点

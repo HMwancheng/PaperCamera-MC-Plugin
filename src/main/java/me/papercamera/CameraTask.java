@@ -129,8 +129,24 @@ public class CameraTask implements Runnable {
         Location targetEye = targetLoc.clone();
         targetEye.add(0, 1.6, 0);
 
+        // Ensure camera is not below or too close to target
         if (idealPos.getY() <= targetEye.getY() + 0.5) {
             idealPos.setY(targetEye.getY() + 0.5);
+        }
+        // Ensure minimum horizontal distance
+        double horizDist = horizontalDistance(idealPos, targetEye);
+        if (horizDist < config.getMinDistance()) {
+            Vector pushDir = idealPos.toVector().subtract(targetEye.toVector());
+            if (pushDir.lengthSquared() > 0.0001) {
+                pushDir.setY(0).normalize();
+                idealPos.setX(targetEye.getX() + pushDir.getX() * config.getMinDistance());
+                idealPos.setZ(targetEye.getZ() + pushDir.getZ() * config.getMinDistance());
+            } else {
+                // Directly above — push to a random horizontal direction
+                double randAngle = orbitAngle;
+                idealPos.setX(targetEye.getX() + Math.cos(randAngle) * config.getMinDistance());
+                idealPos.setZ(targetEye.getZ() + Math.sin(randAngle) * config.getMinDistance());
+            }
         }
 
         // --- Occlusion-adjusted position ---
@@ -150,33 +166,28 @@ public class CameraTask implements Runnable {
 
             int timeout = config.getOcclusionTimeoutTicks();
             if (occlusionTicks >= timeout) {
-                // Timeout exceeded — handle persistent occlusion
                 if (isTargetEnclosed(targetLoc, world)) {
-                    // Target is fully enclosed — skip to next
                     manager.getLogger().info("Target '" + currentTarget.getName() + "' is fully enclosed, skipping.");
                     switchTarget(camera);
                     return;
                 }
 
                 if (!isTransitioning) {
-                    // Start transition — find a clear position and move toward it
                     Location clearPos = findClearPositionAround(targetEye, world);
                     if (clearPos != null) {
                         transitionTarget = clearPos;
                         isTransitioning = true;
                         manager.getLogger().info("Occlusion timeout — transitioning to clear position.");
                     } else {
-                        // No clear position found at all — skip target
                         manager.getLogger().info("No clear position around '" + currentTarget.getName() + "', skipping.");
                         switchTarget(camera);
                         return;
                     }
                 }
 
-                // Transition: lerp camera toward transitionTarget
                 if (isTransitioning && transitionTarget != null) {
                     desiredPos = lerpPosition(cameraPos, transitionTarget, config.getTransitionLerp());
-                    if (cameraPos.distance(transitionTarget) < 0.3) {
+                    if (cameraPos.distance(transitionTarget) < 0.5) {
                         isTransitioning = false;
                         occlusionTicks = 0;
                     }
@@ -184,7 +195,6 @@ public class CameraTask implements Runnable {
                     desiredPos = adjustedPos;
                 }
             } else {
-                // Brief occlusion — keep orbiting, but hold position from jumping
                 desiredPos = adjustedPos;
             }
         }
@@ -207,9 +217,6 @@ public class CameraTask implements Runnable {
 
     // ==================== Occlusion Logic ====================
 
-    /**
-     * Check if the camera position has a clear line of sight to the target.
-     */
     private boolean hasClearLineOfSight(Location from, Location to, World world) {
         Vector dir = to.toVector().subtract(from.toVector());
         double dist = dir.length();
@@ -219,30 +226,22 @@ public class CameraTask implements Runnable {
         return result == null || result.getHitBlock() == null;
     }
 
-    /**
-     * Check if a target is fully enclosed (all 6 directions blocked within 5 blocks).
-     */
     private boolean isTargetEnclosed(Location targetLoc, World world) {
-        Location checkOrigin = targetLoc.clone().add(0, 1.0, 0); // at eye level
+        Location checkOrigin = targetLoc.clone().add(0, 1.0, 0);
         for (Vector dir : SURROUND_DIRECTIONS) {
             RayTraceResult result = world.rayTraceBlocks(checkOrigin, dir, 5.0,
                     FluidCollisionMode.NEVER, true);
             if (result == null || result.getHitBlock() == null) {
-                return false; // has an open direction
+                return false;
             }
         }
-        return true; // all 6 directions blocked within 5 blocks
+        return true;
     }
 
-    /**
-     * Find any position around the target that has a clear line of sight,
-     * scanning from minDistance to maxDistance outward.
-     */
     private Location findClearPositionAround(Location targetEye, World world) {
         double minDist = config.getMinDistance();
         double maxDist = config.getMaxDistance();
 
-        // Try 8 horizontal angles + 3 vertical levels
         for (int v = -1; v <= 1; v++) {
             double yOff = v * 2.0;
             for (int a = 0; a < 8; a++) {
@@ -252,8 +251,7 @@ public class CameraTask implements Runnable {
                     double y = targetEye.getY() + yOff;
                     double z = targetEye.getZ() + Math.sin(angle) * dist;
 
-                    // Clamp y to reasonable range
-                    if (y < targetEye.getY() - 3.0) y = targetEye.getY() - 0.5;
+                    if (y < targetEye.getY() - 1.0) y = targetEye.getY() + 0.5;
                     if (y > targetEye.getY() + 10.0) y = targetEye.getY() + 5.0;
 
                     Location testPos = new Location(world, x, y, z);
@@ -303,29 +301,25 @@ public class CameraTask implements Runnable {
             testPos = hitPos.clone().add(direction.clone().multiply(0.5));
         }
 
-        // --- Fallbacks ---
-        Location above = targetEye.clone();
-        above.setY(targetEye.getY() + config.getOrbitHeight() + 2.0);
-
-        if (above.getBlock().isPassable()) {
-            Vector downDir = targetEye.toVector().subtract(above.toVector()).normalize();
-            double aboveDist = above.distance(targetEye);
-            RayTraceResult aboveResult = world.rayTraceBlocks(
-                    above, downDir, aboveDist, FluidCollisionMode.NEVER, true);
-            if (aboveResult == null || aboveResult.getHitBlock() == null) {
-                return above;
-            }
-        }
-
-        for (int i = 1; i <= 3; i++) {
+        // --- Fallback: try angled positions with horizontal offset ---
+        // Must NOT be directly above the target — always include horizontal offset
+        for (int i = 1; i <= 4; i++) {
             double testAngle = orbitAngle + (Math.PI / 2.0) * i;
             double r = config.getOrbitRadius();
-            double h = config.getOrbitHeight();
             double altX = orbitCenter.getX() + r * Math.cos(testAngle);
-            double altY = orbitCenter.getY() + h;
+            double altY = orbitCenter.getY() + config.getOrbitHeight();
             double altZ = orbitCenter.getZ() + r * Math.sin(testAngle);
 
             Location altPos = new Location(world, altX, altY, altZ);
+
+            // Ensure horizontal distance from target
+            double hDist = horizontalDistance(altPos, targetEye);
+            if (hDist < minDist) {
+                Vector pushDir = new Vector(altPos.getX() - targetEye.getX(), 0, altPos.getZ() - targetEye.getZ()).normalize();
+                altPos.setX(targetEye.getX() + pushDir.getX() * minDist);
+                altPos.setZ(targetEye.getZ() + pushDir.getZ() * minDist);
+            }
+
             Vector altDir = targetEye.toVector().subtract(altPos.toVector()).normalize();
             double altDist = altPos.distance(targetEye);
 
@@ -342,6 +336,12 @@ public class CameraTask implements Runnable {
     }
 
     // ==================== Helpers ====================
+
+    private double horizontalDistance(Location a, Location b) {
+        double dx = a.getX() - b.getX();
+        double dz = a.getZ() - b.getZ();
+        return Math.sqrt(dx * dx + dz * dz);
+    }
 
     private void lerpOrbitCenter(Location targetLoc) {
         double lerp = config.getLerpFactor();
@@ -382,14 +382,12 @@ public class CameraTask implements Runnable {
         double targetYaw;
 
         if (Math.abs(targetPitch) > 80.0) {
-            // Nearly vertical — lock yaw to last stable value
             targetYaw = lastStableYaw;
         } else {
             targetYaw = Math.toDegrees(Math.atan2(-x, z));
             lastStableYaw = (float) targetYaw;
         }
 
-        // --- Smooth yaw/pitch to avoid jumpy head movement ---
         if (!directionInitialized) {
             smoothedYaw = (float) targetYaw;
             smoothedPitch = (float) targetPitch;
@@ -404,12 +402,8 @@ public class CameraTask implements Runnable {
         cameraPos.setPitch(smoothedPitch);
     }
 
-    /**
-     * Lerp between two yaw angles, handling the 360° wrap correctly.
-     */
     private float lerpYaw(float from, float to, double factor) {
         float diff = to - from;
-        // Normalize to [-180, 180]
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
         return from + (float) (diff * factor);

@@ -7,6 +7,7 @@ import java.util.*;
 /**
  * Manages the pool of camera targets (players + spawn points).
  * Provides random selection with no-back-to-back repeats.
+ * When players are online, non-primary spawn points appear with reduced frequency.
  */
 public class TargetManager {
 
@@ -49,12 +50,9 @@ public class TargetManager {
 
     /**
      * Handle a player changing worlds.
-     * Players are always kept in the pool regardless of world.
      */
     public void handlePlayerWorldChange(Player player) {
         if (config.isCameraPlayer(player.getName())) return;
-        // Always keep the player in the pool — they can be followed anywhere
-        // No need to add/remove based on world
     }
 
     /**
@@ -76,17 +74,13 @@ public class TargetManager {
 
         CameraTarget target = shufflePool.get(shuffleIndex++);
 
-        // Verify it's still valid
         if (!target.isValid()) {
-            return getNextTarget(); // recurse
+            return getNextTarget();
         }
 
         return target;
     }
 
-    /**
-     * Check if there are any valid targets in the pool.
-     */
     public boolean hasTargets() {
         return !buildValidTargets().isEmpty();
     }
@@ -102,15 +96,33 @@ public class TargetManager {
     private List<CameraTarget> buildValidTargets() {
         List<CameraTarget> targets = new ArrayList<>();
 
-        // Add all valid player targets (any world, including nether/end)
+        // Add all valid player targets
         for (PlayerTarget pt : playerTargets) {
             if (pt.isValid()) {
                 targets.add(pt);
             }
         }
 
-        // Add spawn targets (always valid if world is loaded)
-        targets.addAll(spawnTargets);
+        // Add spawn targets with weighting
+        // When players are online, non-primary spawn points appear less frequently
+        boolean hasPlayers = !targets.isEmpty();
+        String primaryWorld = config.getPrimaryWorld();
+        double weight = config.getSpawnWeight();
+
+        for (LocationTarget st : spawnTargets) {
+            boolean isPrimary = st.getName().equals(primaryWorld)
+                    || (st.getWorld() != null && st.getWorld().getName().equals(primaryWorld));
+
+            if (hasPlayers && !isPrimary) {
+                // Non-primary spawn: only add if random < weight
+                if (random.nextDouble() < weight) {
+                    targets.add(st);
+                }
+            } else {
+                // Primary spawn or no players: always add
+                targets.add(st);
+            }
+        }
 
         return targets;
     }

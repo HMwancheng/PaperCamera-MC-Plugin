@@ -13,7 +13,7 @@ import java.util.*;
 
 public class CameraConfig {
 
-    private static final int CURRENT_CONFIG_VERSION = 2;
+    private static final int CURRENT_CONFIG_VERSION = 3;
 
     private final JavaPlugin plugin;
 
@@ -34,6 +34,8 @@ public class CameraConfig {
     private double cameraSmoothingLerp;
     private double directionLerpFactor;
     private List<String> idleWorlds;
+    private String primaryWorld;
+    private double spawnWeight;
     private String spawnCommand;
     private final Map<String, Location> spawnPoints = new LinkedHashMap<>();
 
@@ -70,10 +72,15 @@ public class CameraConfig {
         transitionLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("occlusion.transition-lerp", 0.15)));
         cameraSmoothingEnabled = cfg.getBoolean("camera-smoothing.enabled", true);
         cameraSmoothingLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.lerp-factor", 0.35)));
-        directionLerpFactor = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.direction-lerp-factor", 0.20)));
+        directionLerpFactor = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.direction-lerp-factor", 0.10)));
         idleWorlds = cfg.getStringList("idle-worlds");
         // Filter out empty strings from idle-worlds
         idleWorlds.removeIf(String::isEmpty);
+        primaryWorld = cfg.getString("primary-world", "");
+        if (primaryWorld.isEmpty() && !idleWorlds.isEmpty()) {
+            primaryWorld = idleWorlds.get(0);
+        }
+        spawnWeight = Math.max(0.0, Math.min(1.0, cfg.getDouble("spawn-weight", 0.2)));
         spawnCommand = cfg.getString("spawn-command", "");
 
         // Validate durations
@@ -193,6 +200,8 @@ public class CameraConfig {
     public double getCameraSmoothingLerp() { return cameraSmoothingLerp; }
     public double getDirectionLerpFactor() { return directionLerpFactor; }
     public List<String> getIdleWorlds() { return idleWorlds; }
+    public String getPrimaryWorld() { return primaryWorld; }
+    public double getSpawnWeight() { return spawnWeight; }
     public String getSpawnCommand() { return spawnCommand; }
     public Map<String, Location> getSpawnPoints() { return spawnPoints; }
 }
