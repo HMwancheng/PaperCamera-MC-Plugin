@@ -13,12 +13,13 @@ import java.util.*;
 
 public class CameraConfig {
 
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 4;
 
     private final JavaPlugin plugin;
 
     private String cameraPlayerName;
     private boolean autoStart;
+    private int spawnDiscoveryDelay;
     private double orbitRadius;
     private double orbitHeight;
     private double orbitSpeed;
@@ -59,6 +60,7 @@ public class CameraConfig {
 
         cameraPlayerName = cfg.getString("camera-player-name", "camera");
         autoStart = cfg.getBoolean("auto-start", true);
+        spawnDiscoveryDelay = Math.max(0, cfg.getInt("spawn-discovery-delay", 5));
         orbitRadius = cfg.getDouble("orbit.radius", 8.0);
         orbitHeight = cfg.getDouble("orbit.height", 2.5);
         orbitSpeed = cfg.getDouble("orbit.speed", 0.005);
@@ -66,8 +68,8 @@ public class CameraConfig {
         maxDuration = cfg.getInt("follow.max-duration", 30);
         lerpFactor = Math.max(0.0, Math.min(1.0, cfg.getDouble("follow.lerp-factor", 0.05)));
         maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.25));
-        minDistance = cfg.getDouble("occlusion.min-distance", 5.0);
-        maxDistance = cfg.getDouble("occlusion.max-distance", 32.0);
+        minDistance = cfg.getDouble("occlusion.min-distance", 3.5);
+        maxDistance = cfg.getDouble("occlusion.max-distance", 24.0);
         occlusionTimeoutTicks = Math.max(0, cfg.getInt("occlusion.timeout-ticks", 40));
         transitionLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("occlusion.transition-lerp", 0.15)));
         cameraSmoothingEnabled = cfg.getBoolean("camera-smoothing.enabled", true);
@@ -80,7 +82,7 @@ public class CameraConfig {
         if (primaryWorld.isEmpty() && !idleWorlds.isEmpty()) {
             primaryWorld = idleWorlds.get(0);
         }
-        spawnWeight = Math.max(0.0, Math.min(1.0, cfg.getDouble("spawn-weight", 0.2)));
+        spawnWeight = Math.max(0.0, Math.min(1.0, cfg.getDouble("spawn-weight", 0.3)));
         spawnCommand = cfg.getString("spawn-command", "");
 
         // Validate durations
@@ -185,6 +187,7 @@ public class CameraConfig {
 
     public String getCameraPlayerName() { return cameraPlayerName; }
     public boolean isAutoStart() { return autoStart; }
+    public int getSpawnDiscoveryDelay() { return spawnDiscoveryDelay; }
     public double getOrbitRadius() { return orbitRadius; }
     public double getOrbitHeight() { return orbitHeight; }
     public double getOrbitSpeed() { return orbitSpeed; }

@@ -198,11 +198,17 @@ public class CameraTask implements Runnable {
             // else: below threshold, keep debouncedTarget unchanged (no reaction)
         }
 
-        // --- Lerp adjustedCameraPos toward debouncedTarget ---
+        // --- Lerp adjustedCameraPos toward debouncedTarget (with distance acceleration) ---
         if (adjustedCameraPos == null || !adjustedCameraPos.getWorld().equals(world)) {
             adjustedCameraPos = debouncedTarget.clone();
         } else {
-            adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, OCCLUSION_LERP);
+            double dist = adjustedCameraPos.distance(debouncedTarget);
+            if (dist > config.getMaxDistance()) {
+                // Far from target — accelerate to close the gap faster
+                adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, Math.min(0.8, OCCLUSION_LERP * 4));
+            } else {
+                adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, OCCLUSION_LERP);
+            }
         }
 
         // --- Check if the current position has clear line of sight ---
@@ -501,12 +507,16 @@ public class CameraTask implements Runnable {
         if (targetLoc != null) {
             orbitCenter = targetLoc.clone();
 
-            // Start at the orbit position so the camera looks at the target immediately
-            World w = targetLoc.getWorld();
-            double startX = targetLoc.getX() + config.getOrbitRadius() * Math.cos(orbitAngle);
-            double startY = targetLoc.getY() + config.getOrbitHeight();
-            double startZ = targetLoc.getZ() + config.getOrbitRadius() * Math.sin(orbitAngle);
-            cameraPos = new Location(w, startX, startY, startZ);
+            // Find a clear starting orbit position
+            Location startPos = findClearOrbitStart(targetLoc);
+            if (startPos == null) {
+                // No clear position around this target — skip it
+                manager.getLogger().info("No clear orbit position around '" + target.getName() + "', skipping.");
+                switchTarget(camera);
+                return;
+            }
+
+            cameraPos = startPos.clone();
             adjustedCameraPos = cameraPos.clone();
 
             if (!camera.getWorld().equals(targetLoc.getWorld())) {
@@ -517,11 +527,45 @@ public class CameraTask implements Runnable {
                     try { camera.teleport(targetLoc); } catch (Exception ignored) {}
                 }
             } else {
-                // Same world: teleport camera to the starting orbit position
                 manager.ensureChunkLoaded(cameraPos);
                 try { camera.teleport(cameraPos); } catch (Exception ignored) {}
             }
         }
+    }
+
+    /**
+     * Find a clear starting orbit position around the target.
+     * Tries 8 angles around the orbit circle at the configured height and radius.
+     * Returns null if no clear position is found.
+     */
+    private Location findClearOrbitStart(Location targetLoc) {
+        World world = targetLoc.getWorld();
+        if (world == null) return null;
+
+        Location targetEye = targetLoc.clone().add(0, 1.6, 0);
+        double radius = config.getOrbitRadius();
+        double height = config.getOrbitHeight();
+
+        for (int i = 0; i < 8; i++) {
+            double angle = (Math.PI / 4) * i;
+            double x = targetLoc.getX() + radius * Math.cos(angle);
+            double y = targetLoc.getY() + height;
+            double z = targetLoc.getZ() + radius * Math.sin(angle);
+
+            Location testPos = new Location(world, x, y, z);
+
+            // Check if the position itself is inside a block
+            if (!testPos.getBlock().isPassable()) {
+                continue;
+            }
+
+            // Check if there is a clear line of sight to the target
+            if (hasClearLineOfSight(testPos, targetEye, world)) {
+                return testPos;
+            }
+        }
+
+        return null;
     }
 
     public CameraTarget getCurrentTarget() {

@@ -247,8 +247,14 @@ public class CameraManager {
         player.setGameMode(GameMode.SPECTATOR);
 
         if (config.isAutoStart() && !running) {
-            // Will auto-discover spawn points before starting if needed
-            start();
+            int delaySeconds = config.getSpawnDiscoveryDelay();
+            if (delaySeconds > 0) {
+                plugin.getLogger().info("Camera player joined. Waiting " + delaySeconds
+                        + "s for world loading before starting...");
+                Bukkit.getScheduler().runTaskLater(plugin, this::start, delaySeconds * 20L);
+            } else {
+                start();
+            }
         }
     }
 

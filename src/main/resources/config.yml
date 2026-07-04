@@ -3,13 +3,16 @@
 # 更新插件时新增的配置项会自动合并，无需手动删除再生成
 
 # 配置文件版本（自动管理，请勿手动修改）
-config-version: 3
+config-version: 4
 
 # 摄像机玩家名称（需要提前登录到服务器）
 camera-player-name: "camera"
 
 # 摄像机玩家登录后是否自动启动
 auto-start: true
+
+# 启动后等待时间（秒），用于等待地图加载完毕后再自动发现出生点
+spawn-discovery-delay: 5
 
 # 环绕设置
 orbit:
@@ -26,8 +29,8 @@ follow:
 
 # 遮挡检测设置
 occlusion:
-  min-distance: 5.0  # 摄像机到目标的最近距离（格）
-  max-distance: 32.0 # 摄像机到目标的最远距离（2个区块=32格）
+  min-distance: 3.5  # 摄像机到目标的最近距离（格）
+  max-distance: 24.0 # 摄像机到目标的最远距离（格），超过时加速靠近
   timeout-ticks: 40  # 短暂遮挡容忍时间（tick），超过后启动恢复（40=2秒）
   transition-lerp: 0.15  # 遮挡恢复时摄像机移动的 lerp 速度（越大越快）
 
@@ -48,7 +51,7 @@ idle-worlds:
 # 有玩家在线时，非主世界的出生点出现频率 = spawn-weight（0.0-1.0）
 # 设为 0.0 在有玩家时完全不展示非主世界出生点，设为 1.0 则等概率
 primary-world: ""
-spawn-weight: 0.2
+spawn-weight: 0.3
 
 # 出生点发现命令（可选）
 # 如果设置了此命令，插件会执行 "{命令前缀} {世界名}" 来传送到各世界的出生点
