@@ -40,6 +40,8 @@ public class CameraTask implements Runnable {
     // --- Occlusion lerp position (smoothly tracks occlusion-adjusted target) ---
     private Location adjustedCameraPos;
     private static final double OCCLUSION_LERP = 0.25; // speed of occlusion push/pull
+    private static final int RETREAT_COOLDOWN = 20; // ticks before allowing retreat (1 second)
+    private int retreatCooldown; // counts down from RETREAT_COOLDOWN
 
     // --- Direction smoothing (yaw/pitch) ---
     private float smoothedYaw;
@@ -158,10 +160,25 @@ public class CameraTask implements Runnable {
         // --- Occlusion target: what adjustForOcclusion wants (may be far from idealPos) ---
         Location occlusionTarget = adjustForOcclusion(idealPos, targetEye, world);
 
-        // --- Lerp adjustedCameraPos toward occlusionTarget (bidirectional) ---
-        // When occlusionTarget moves away from idealPos (pillar), lerp pulls camera toward it.
-        // When occlusionTarget snaps back to idealPos (pillar passed), lerp pulls camera back.
-        // This single lerp eliminates the snap-back fence-swing effect.
+        // --- Retreat cooldown logic ---
+        // When the camera was pushed forward (occlusionTarget != idealPos), start a cooldown.
+        // During the cooldown, even if occlusionTarget snaps back to idealPos (gap between pillars),
+        // we hold position to avoid wobbling back and forth between closely spaced obstacles.
+        double distToTarget = occlusionTarget.distance(targetEye);
+        double idealDistToTarget = idealPos.distance(targetEye);
+        boolean wasPushedForward = (distToTarget + 0.5) < idealDistToTarget; // occlusionTarget is noticeably closer
+
+        if (wasPushedForward) {
+            retreatCooldown = RETREAT_COOLDOWN;
+        } else if (retreatCooldown > 0) {
+            retreatCooldown--;
+            // During cooldown, if the ideal position is now clear, hold steady
+            if (hasClearLineOfSight(idealPos, targetEye, world)) {
+                occlusionTarget = adjustedCameraPos; // hold position, don't retreat
+            }
+        }
+
+        // --- Lerp adjustedCameraPos toward occlusionTarget ---
         if (adjustedCameraPos == null || !adjustedCameraPos.getWorld().equals(world)) {
             adjustedCameraPos = occlusionTarget.clone();
         } else {
@@ -316,6 +333,25 @@ public class CameraTask implements Runnable {
 
             if (hitDist < minDist) break;
 
+            // --- Try raising camera to go over low obstacles ---
+            // If the hit block is below the camera's current height, try raising Y
+            if (hitPos.getY() < testPos.getY() - 0.5) {
+                for (int raise = 1; raise <= 3; raise++) {
+                    Location raisedPos = testPos.clone();
+                    raisedPos.setY(testPos.getY() + raise);
+                    if (raisedPos.getY() > targetEye.getY() + 10.0) break; // don't go too high
+
+                    RayTraceResult raisedResult = world.rayTraceBlocks(
+                            raisedPos, direction, raisedPos.distance(targetEye),
+                            FluidCollisionMode.NEVER, true
+                    );
+                    if (raisedResult == null || raisedResult.getHitBlock() == null) {
+                        // Raised position has clear view — use it
+                        return raisedPos;
+                    }
+                }
+            }
+
             testPos = hitPos.clone().add(direction.clone().multiply(0.5));
         }
 
@@ -465,6 +501,7 @@ public class CameraTask implements Runnable {
         isTransitioning = false;
         transitionTarget = null;
         directionInitialized = false;
+        retreatCooldown = 0;
 
         int minTicks = config.getMinDuration() * 20;
         int maxTicks = config.getMaxDuration() * 20;
