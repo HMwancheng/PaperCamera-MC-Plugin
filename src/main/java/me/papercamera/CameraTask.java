@@ -494,22 +494,32 @@ public class CameraTask implements Runnable {
         int maxTicks = config.getMaxDuration() * 20;
         targetDurationTicks = minTicks + random.nextInt(Math.max(1, maxTicks - minTicks + 1));
 
-        Location targetLoc = target.getLocation();
-        if (targetLoc != null) {
-            orbitCenter = targetLoc.clone();
-            cameraPos = targetLoc.clone();
-            adjustedCameraPos = targetLoc.clone();
-        }
         orbitAngle = random.nextDouble() * Math.PI * 2;
         lastStableYaw = (float) (random.nextDouble() * 360.0);
 
-        if (targetLoc != null && !camera.getWorld().equals(targetLoc.getWorld())) {
-            // For spawn points, prefer spawn-command (mv tp) for cross-world teleport
-            if (target instanceof LocationTarget) {
-                manager.teleportCameraToWorld(targetLoc.getWorld().getName());
+        Location targetLoc = target.getLocation();
+        if (targetLoc != null) {
+            orbitCenter = targetLoc.clone();
+
+            // Start at the orbit position so the camera looks at the target immediately
+            World w = targetLoc.getWorld();
+            double startX = targetLoc.getX() + config.getOrbitRadius() * Math.cos(orbitAngle);
+            double startY = targetLoc.getY() + config.getOrbitHeight();
+            double startZ = targetLoc.getZ() + config.getOrbitRadius() * Math.sin(orbitAngle);
+            cameraPos = new Location(w, startX, startY, startZ);
+            adjustedCameraPos = cameraPos.clone();
+
+            if (!camera.getWorld().equals(targetLoc.getWorld())) {
+                if (target instanceof LocationTarget) {
+                    manager.teleportCameraToWorld(targetLoc.getWorld().getName());
+                } else {
+                    manager.ensureChunkLoaded(targetLoc);
+                    try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+                }
             } else {
-                manager.ensureChunkLoaded(targetLoc);
-                try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+                // Same world: teleport camera to the starting orbit position
+                manager.ensureChunkLoaded(cameraPos);
+                try { camera.teleport(cameraPos); } catch (Exception ignored) {}
             }
         }
     }
