@@ -47,7 +47,6 @@ public class CameraTask implements Runnable {
     private int pushTicks;    // consecutive ticks where occlusionTarget is closer than idealPos
     private int retreatTicks; // consecutive ticks where occlusionTarget returned to idealPos
     private Location debouncedTarget; // the actual target we lerp toward (only changes after threshold)
-    private boolean pushLocked; // true = we've committed to a push, don't update debouncedTarget
 
     // --- Direction smoothing (yaw/pitch) ---
     private float smoothedYaw;
@@ -171,7 +170,6 @@ public class CameraTask implements Runnable {
             debouncedTarget = rawTarget.clone();
             pushTicks = 0;
             retreatTicks = 0;
-            pushLocked = false;
         }
 
         double rawDist = rawTarget.distance(targetEye);
@@ -181,34 +179,22 @@ public class CameraTask implements Runnable {
         if (isPushed) {
             pushTicks++;
             retreatTicks = 0;
-            if (pushTicks >= PUSH_THRESHOLD && !pushLocked) {
-                // Obstacle persisted long enough — commit to the pushed position once
+            if (pushTicks >= PUSH_THRESHOLD) {
                 debouncedTarget = rawTarget.clone();
-                pushLocked = true;
             }
-            // else: below threshold or already locked, keep debouncedTarget unchanged
         } else {
             retreatTicks++;
             pushTicks = 0;
             if (retreatTicks >= RETREAT_THRESHOLD) {
-                // Clear view persisted long enough — return to idealPos
                 debouncedTarget = rawTarget.clone();
-                pushLocked = false;
             }
-            // else: below threshold, keep debouncedTarget unchanged (no reaction)
         }
 
-        // --- Lerp adjustedCameraPos toward debouncedTarget (with distance acceleration) ---
+        // --- Lerp adjustedCameraPos toward debouncedTarget ---
         if (adjustedCameraPos == null || !adjustedCameraPos.getWorld().equals(world)) {
             adjustedCameraPos = debouncedTarget.clone();
         } else {
-            double dist = adjustedCameraPos.distance(debouncedTarget);
-            if (dist > config.getMaxDistance()) {
-                // Far from target — accelerate to close the gap faster
-                adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, Math.min(0.8, OCCLUSION_LERP * 4));
-            } else {
-                adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, OCCLUSION_LERP);
-            }
+            adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, OCCLUSION_LERP);
         }
 
         // --- Check if the current position has clear line of sight ---
@@ -398,12 +384,29 @@ public class CameraTask implements Runnable {
     }
 
     private void lerpOrbitCenter(Location targetLoc) {
-        double lerp = config.getLerpFactor();
-        double maxMove = config.getMaxMovePerTick();
+        double baseLerp = config.getLerpFactor();
+        double baseMaxMove = config.getMaxMovePerTick();
+        double maxDist = config.getMaxDistance();
 
-        double dx = (targetLoc.getX() - orbitCenter.getX()) * lerp;
-        double dy = (targetLoc.getY() - orbitCenter.getY()) * lerp;
-        double dz = (targetLoc.getZ() - orbitCenter.getZ()) * lerp;
+        double dx = targetLoc.getX() - orbitCenter.getX();
+        double dy = targetLoc.getY() - orbitCenter.getY();
+        double dz = targetLoc.getZ() - orbitCenter.getZ();
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        double lerp, maxMove;
+        if (dist > maxDist) {
+            // Far from target — scale lerp and maxMove proportionally to distance
+            double scale = dist / maxDist;
+            lerp = Math.min(0.5, baseLerp * scale);
+            maxMove = baseMaxMove * scale;
+        } else {
+            lerp = baseLerp;
+            maxMove = baseMaxMove;
+        }
+
+        dx *= lerp;
+        dy *= lerp;
+        dz *= lerp;
 
         double moveDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (moveDist > maxMove) {
@@ -493,7 +496,6 @@ public class CameraTask implements Runnable {
         directionInitialized = false;
         pushTicks = 0;
         retreatTicks = 0;
-        pushLocked = false;
         debouncedTarget = null;
 
         int minTicks = config.getMinDuration() * 20;
