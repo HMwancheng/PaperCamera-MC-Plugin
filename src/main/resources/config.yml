@@ -11,7 +11,7 @@ auto-start: true
 orbit:
   radius: 8.0       # 环绕半径（格）
   height: 2.5       # 摄像机高于目标的高度（格）
-  speed: 0.015      # 每 tick 旋转弧度（越大转得越快）
+  speed: 0.005      # 每 tick 旋转弧度（越大转得越快）
 
 # 跟随设置
 follow:
@@ -24,6 +24,13 @@ follow:
 occlusion:
   min-distance: 5.0  # 摄像机到目标的最近距离（格）
   max-distance: 32.0 # 摄像机到目标的最远距离（2个区块=32格）
+  timeout-ticks: 40  # 短暂遮挡容忍时间（tick），超过后启动恢复（40=2秒）
+  transition-lerp: 0.15  # 遮挡恢复时摄像机移动的 lerp 速度（越大越快）
+
+# 摄像机平滑设置（第二层平滑，客户端看起来更流畅）
+camera-smoothing:
+  enabled: true
+  lerp-factor: 0.35  # 摄像机实际位置跟随理想位置的速度（0.0-1.0）
 
 # 摄像机可操作的世界（只在这些世界活动，不进入下界/末地）
 idle-worlds:

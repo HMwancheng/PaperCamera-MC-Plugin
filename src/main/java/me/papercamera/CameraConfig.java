@@ -23,6 +23,10 @@ public class CameraConfig {
     private double maxMovePerTick;
     private double minDistance;
     private double maxDistance;
+    private int occlusionTimeoutTicks;
+    private double transitionLerp;
+    private boolean cameraSmoothingEnabled;
+    private double cameraSmoothingLerp;
     private List<String> idleWorlds;
     private String spawnCommand;
     private final Map<String, Location> spawnPoints = new LinkedHashMap<>();
@@ -40,13 +44,17 @@ public class CameraConfig {
         autoStart = cfg.getBoolean("auto-start", true);
         orbitRadius = cfg.getDouble("orbit.radius", 8.0);
         orbitHeight = cfg.getDouble("orbit.height", 2.5);
-        orbitSpeed = cfg.getDouble("orbit.speed", 0.015);
+        orbitSpeed = cfg.getDouble("orbit.speed", 0.005);
         minDuration = cfg.getInt("follow.min-duration", 15);
         maxDuration = cfg.getInt("follow.max-duration", 30);
         lerpFactor = Math.max(0.0, Math.min(1.0, cfg.getDouble("follow.lerp-factor", 0.05)));
         maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.25));
         minDistance = cfg.getDouble("occlusion.min-distance", 5.0);
         maxDistance = cfg.getDouble("occlusion.max-distance", 32.0);
+        occlusionTimeoutTicks = Math.max(0, cfg.getInt("occlusion.timeout-ticks", 40));
+        transitionLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("occlusion.transition-lerp", 0.15)));
+        cameraSmoothingEnabled = cfg.getBoolean("camera-smoothing.enabled", true);
+        cameraSmoothingLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.lerp-factor", 0.35)));
         idleWorlds = cfg.getStringList("idle-worlds");
         spawnCommand = cfg.getString("spawn-command", "");
 
@@ -106,6 +114,10 @@ public class CameraConfig {
     public double getMaxMovePerTick() { return maxMovePerTick; }
     public double getMinDistance() { return minDistance; }
     public double getMaxDistance() { return maxDistance; }
+    public int getOcclusionTimeoutTicks() { return occlusionTimeoutTicks; }
+    public double getTransitionLerp() { return transitionLerp; }
+    public boolean isCameraSmoothingEnabled() { return cameraSmoothingEnabled; }
+    public double getCameraSmoothingLerp() { return cameraSmoothingLerp; }
     public List<String> getIdleWorlds() { return idleWorlds; }
     public String getSpawnCommand() { return spawnCommand; }
     public Map<String, Location> getSpawnPoints() { return spawnPoints; }
