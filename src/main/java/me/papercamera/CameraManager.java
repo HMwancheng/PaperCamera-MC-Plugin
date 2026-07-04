@@ -198,27 +198,46 @@ public class CameraManager {
                 String fullCmd = spawnCmd + " " + worldName;
                 plugin.getLogger().info("Discovering spawn for '" + worldName + "': executing /" + fullCmd);
 
-                // Execute the command on the camera player
                 Bukkit.dispatchCommand(camera, fullCmd);
 
-                // Schedule a delayed check to capture the location after teleport
+                // Wait for teleport to complete, then capture with retry
                 new BukkitRunnable() {
+                    int retries = 0;
+
                     @Override
                     public void run() {
                         Location loc = camera.getLocation();
-                        if (loc != null && loc.getWorld() != null) {
+                        if (loc != null && loc.getWorld() != null
+                                && loc.getWorld().getName().equalsIgnoreCase(worldName)) {
+                            // Successfully teleported to the target world
                             config.getSpawnPoints().put(worldName, loc.clone());
                             plugin.getLogger().info("Recorded spawn for '" + worldName
                                     + "': " + loc.getWorld().getName()
                                     + " (" + (int) loc.getX() + ", " + (int) loc.getY() + ", " + (int) loc.getZ() + ")");
+                            saveSpawnPointsToConfig();
+                            targetManager.loadSpawnTargets();
+                            cancel();
+                        } else if (retries < 5) {
+                            retries++;
+                            if (retries == 1) {
+                                plugin.getLogger().info("Waiting for teleport to '" + worldName + "' to complete...");
+                            }
+                        } else {
+                            // Max retries exceeded — record whatever we have
+                            plugin.getLogger().warning("Teleport to '" + worldName
+                                    + "' may not have completed. Current world: "
+                                    + (loc != null && loc.getWorld() != null ? loc.getWorld().getName() : "unknown"));
+                            if (loc != null && loc.getWorld() != null) {
+                                config.getSpawnPoints().put(worldName, loc.clone());
+                                saveSpawnPointsToConfig();
+                            }
+                            targetManager.loadSpawnTargets();
+                            cancel();
                         }
-                        // Persist discovered spawn points to config.yml
-                        saveSpawnPointsToConfig();
-                        targetManager.loadSpawnTargets();
                     }
-                }.runTaskLater(plugin, 10L); // wait 10 ticks (0.5s) for teleport to complete
+                }.runTaskTimer(plugin, 20L, 20L); // check every 1 second, up to 5 seconds
             }
-        }.runTaskTimer(plugin, 0L, 20L); // process one world per second
+        }.runTaskTimer(plugin, 0L, 60L); // process one world every 3 seconds
     }
 
     /**
@@ -294,6 +313,34 @@ public class CameraManager {
         int cz = location.getBlockZ() >> 4;
         if (!world.isChunkLoaded(cx, cz)) {
             world.getChunkAt(cx, cz); // synchronous load
+        }
+    }
+
+    /**
+     * Teleport the camera to a target world using spawn-command if configured,
+     * falling back to Bukkit teleport. Call this when switching to a spawn point
+     * in a different world.
+     */
+    public void teleportCameraToWorld(String worldName) {
+        Player camera = getCameraPlayer();
+        if (camera == null) return;
+
+        // Already in the target world
+        if (camera.getWorld().getName().equalsIgnoreCase(worldName)) return;
+
+        String spawnCmd = config.getSpawnCommand();
+        if (spawnCmd != null && !spawnCmd.isEmpty()) {
+            // Use spawn-command (e.g., "mv tp world")
+            String fullCmd = spawnCmd + " " + worldName;
+            plugin.getLogger().info("Teleporting camera to '" + worldName + "' via /" + fullCmd);
+            Bukkit.dispatchCommand(camera, fullCmd);
+        } else {
+            // Fallback: use Bukkit teleport
+            World world = Bukkit.getWorld(worldName);
+            if (world != null) {
+                ensureChunkLoaded(world.getSpawnLocation());
+                try { camera.teleport(world.getSpawnLocation()); } catch (Exception ignored) {}
+            }
         }
     }
 

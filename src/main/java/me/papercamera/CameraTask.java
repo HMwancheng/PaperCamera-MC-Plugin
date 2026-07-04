@@ -89,8 +89,12 @@ public class CameraTask implements Runnable {
 
         // --- Cross-world check ---
         if (!camera.getWorld().equals(targetLoc.getWorld())) {
-            manager.ensureChunkLoaded(targetLoc);
-            try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+            if (currentTarget instanceof LocationTarget) {
+                manager.teleportCameraToWorld(targetLoc.getWorld().getName());
+            } else {
+                manager.ensureChunkLoaded(targetLoc);
+                try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+            }
             orbitCenter = targetLoc.clone();
             cameraPos = targetLoc.clone();
             return;
@@ -451,8 +455,13 @@ public class CameraTask implements Runnable {
         lastStableYaw = (float) (random.nextDouble() * 360.0);
 
         if (targetLoc != null && !camera.getWorld().equals(targetLoc.getWorld())) {
-            manager.ensureChunkLoaded(targetLoc);
-            try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+            // For spawn points, prefer spawn-command (mv tp) for cross-world teleport
+            if (target instanceof LocationTarget) {
+                manager.teleportCameraToWorld(targetLoc.getWorld().getName());
+            } else {
+                manager.ensureChunkLoaded(targetLoc);
+                try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+            }
         }
     }
 
