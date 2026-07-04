@@ -17,7 +17,7 @@ import java.util.List;
 public class CameraCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION = "papercamera.admin";
-    private static final List<String> SUBCOMMANDS = List.of("start", "stop", "status", "reload", "skip");
+    private static final List<String> SUBCOMMANDS = List.of("start", "stop", "status", "reload", "skip", "discoverspawn");
 
     private final CameraManager cameraManager;
     private final CameraConfig config;
@@ -45,6 +45,7 @@ public class CameraCommand implements CommandExecutor, TabCompleter {
             case "status" -> handleStatus(sender);
             case "reload" -> handleReload(sender);
             case "skip" -> handleSkip(sender);
+            case "discoverspawn" -> handleDiscoverSpawn(sender);
             default -> sendUsage(sender);
         }
 
@@ -152,6 +153,27 @@ public class CameraCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(Component.text("Skipped to next target!", NamedTextColor.GREEN));
     }
 
+    private void handleDiscoverSpawn(CommandSender sender) {
+        String spawnCmd = config.getSpawnCommand();
+        if (spawnCmd == null || spawnCmd.isEmpty()) {
+            sender.sendMessage(Component.text(
+                    "spawn-command is not configured! Set it in config.yml first.",
+                    NamedTextColor.RED));
+            return;
+        }
+
+        Player camera = cameraManager.getCameraPlayer();
+        if (camera == null || !camera.isOnline()) {
+            sender.sendMessage(Component.text(
+                    "Camera player '" + config.getCameraPlayerName() + "' is not online!",
+                    NamedTextColor.RED));
+            return;
+        }
+
+        sender.sendMessage(Component.text("Discovering spawn points using command: /" + spawnCmd + " <world>", NamedTextColor.GREEN));
+        cameraManager.discoverSpawnPoints();
+    }
+
     private void sendUsage(CommandSender sender) {
         sender.sendMessage(Component.text("=== PaperCamera ===", NamedTextColor.GOLD));
         sender.sendMessage(Component.text("/camera start  ", NamedTextColor.WHITE)
@@ -164,5 +186,7 @@ public class CameraCommand implements CommandExecutor, TabCompleter {
                 .append(Component.text("- Reload configuration", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/camera skip   ", NamedTextColor.WHITE)
                 .append(Component.text("- Skip to next target", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("/camera discoverspawn", NamedTextColor.WHITE)
+                .append(Component.text("- Auto-discover spawn points via spawn-command", NamedTextColor.GRAY)));
     }
 }

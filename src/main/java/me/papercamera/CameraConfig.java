@@ -24,6 +24,7 @@ public class CameraConfig {
     private double minDistance;
     private double maxDistance;
     private List<String> idleWorlds;
+    private String spawnCommand;
     private final Map<String, Location> spawnPoints = new LinkedHashMap<>();
 
     public CameraConfig(JavaPlugin plugin) {
@@ -39,14 +40,15 @@ public class CameraConfig {
         autoStart = cfg.getBoolean("auto-start", true);
         orbitRadius = cfg.getDouble("orbit.radius", 8.0);
         orbitHeight = cfg.getDouble("orbit.height", 2.5);
-        orbitSpeed = cfg.getDouble("orbit.speed", 0.03);
+        orbitSpeed = cfg.getDouble("orbit.speed", 0.015);
         minDuration = cfg.getInt("follow.min-duration", 15);
         maxDuration = cfg.getInt("follow.max-duration", 30);
         lerpFactor = Math.max(0.0, Math.min(1.0, cfg.getDouble("follow.lerp-factor", 0.05)));
-        maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.5));
+        maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.25));
         minDistance = cfg.getDouble("occlusion.min-distance", 5.0);
         maxDistance = cfg.getDouble("occlusion.max-distance", 32.0);
         idleWorlds = cfg.getStringList("idle-worlds");
+        spawnCommand = cfg.getString("spawn-command", "");
 
         // Validate durations
         if (minDuration > maxDuration) {
@@ -88,6 +90,11 @@ public class CameraConfig {
         plugin.getLogger().info("Loaded " + spawnPoints.size() + " spawn points across " + idleWorlds.size() + " configured worlds.");
     }
 
+    /** Check if a player name matches the camera player name (case-insensitive). */
+    public boolean isCameraPlayer(String playerName) {
+        return playerName.equalsIgnoreCase(cameraPlayerName);
+    }
+
     public String getCameraPlayerName() { return cameraPlayerName; }
     public boolean isAutoStart() { return autoStart; }
     public double getOrbitRadius() { return orbitRadius; }
@@ -100,5 +107,6 @@ public class CameraConfig {
     public double getMinDistance() { return minDistance; }
     public double getMaxDistance() { return maxDistance; }
     public List<String> getIdleWorlds() { return idleWorlds; }
+    public String getSpawnCommand() { return spawnCommand; }
     public Map<String, Location> getSpawnPoints() { return spawnPoints; }
 }

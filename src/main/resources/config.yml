@@ -1,38 +1,44 @@
-# PaperCamera Configuration
+# PaperCamera 配置文件
+# 通过 /camera reload 热重载
 
-# The name of the camera player account
+# 摄像机玩家名称（需要提前登录到服务器）
 camera-player-name: "camera"
 
-# Auto-start camera when camera player joins
+# 摄像机玩家登录后是否自动启动
 auto-start: true
 
-# Orbit settings
+# 环绕设置
 orbit:
-  radius: 8.0       # Distance from target
-  height: 2.5       # Height above target
-  speed: 0.03       # Radians per tick (higher = faster orbit)
+  radius: 8.0       # 环绕半径（格）
+  height: 2.5       # 摄像机高于目标的高度（格）
+  speed: 0.015      # 每 tick 旋转弧度（越大转得越快）
 
-# Follow settings
+# 跟随设置
 follow:
-  min-duration: 15     # Minimum seconds per target
-  max-duration: 30     # Maximum seconds per target
-  lerp-factor: 0.05    # How fast camera center follows target (0.0-1.0)
-  max-move-per-tick: 0.5  # Maximum blocks the orbit center can move per tick
+  min-duration: 15     # 每个目标最少停留秒数
+  max-duration: 30     # 每个目标最多停留秒数
+  lerp-factor: 0.05    # 摄像机中心跟随目标的速度（0.0-1.0，越大越快）
+  max-move-per-tick: 0.25  # 每 tick 摄像机中心最大移动格数（速度上限）
 
-# Occlusion settings
+# 遮挡检测设置
 occlusion:
-  min-distance: 5.0  # Minimum distance from camera to target
-  max-distance: 32.0 # Maximum distance (2 chunks = 32 blocks)
+  min-distance: 5.0  # 摄像机到目标的最近距离（格）
+  max-distance: 32.0 # 摄像机到目标的最远距离（2个区块=32格）
 
-# Worlds for camera operation (only overworld-type worlds)
-# Camera will NOT enter nether/end
+# 摄像机可操作的世界（只在这些世界活动，不进入下界/末地）
 idle-worlds:
   - "world"
   - "world2"
   - "world3"
 
-# Spawn points for each world (used when no players online, or as main-city targets)
-# Camera will orbit at these coordinates
+# 出生点发现命令（可选）
+# 如果设置了此命令，插件会执行 "{命令前缀} {世界名}" 来传送到各世界的出生点
+# 例如 mv tp 配合 MultiVerse 使用：执行 "mv tp world" 传送到 world 出生点
+# 留空则使用下方手动配置的 spawn-points
+spawn-command: ""
+
+# 手动配置的出生点（当 spawn-command 为空时使用）
+# 摄像机在无人时会环绕这些坐标
 spawn-points:
   world:
     world: "world"

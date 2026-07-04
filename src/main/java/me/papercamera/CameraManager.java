@@ -6,8 +6,10 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.Iterator;
 import java.util.logging.Logger;
 
 /**
@@ -115,6 +117,60 @@ public class CameraManager {
     }
 
     /**
+     * Discover spawn points by executing the configured spawn command for each idle world.
+     * The camera will be teleported via the command, and the resulting location is recorded.
+     */
+    public void discoverSpawnPoints() {
+        String spawnCmd = config.getSpawnCommand();
+        if (spawnCmd == null || spawnCmd.isEmpty()) {
+            return;
+        }
+
+        Player camera = getCameraPlayer();
+        if (camera == null) {
+            plugin.getLogger().warning("Cannot discover spawn points: camera player is offline.");
+            return;
+        }
+
+        Iterator<String> worldIter = config.getIdleWorlds().iterator();
+        if (!worldIter.hasNext()) return;
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!worldIter.hasNext()) {
+                    plugin.getLogger().info("Spawn point discovery complete!");
+                    targetManager.loadSpawnTargets();
+                    cancel();
+                    return;
+                }
+
+                String worldName = worldIter.next();
+                String fullCmd = spawnCmd + " " + worldName;
+                plugin.getLogger().info("Discovering spawn for '" + worldName + "': executing /" + fullCmd);
+
+                // Execute the command on the camera player
+                Bukkit.dispatchCommand(camera, fullCmd);
+
+                // Schedule a delayed check to capture the location after teleport
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        Location loc = camera.getLocation();
+                        if (loc != null && loc.getWorld() != null) {
+                            config.getSpawnPoints().put(worldName, loc.clone());
+                            plugin.getLogger().info("Recorded spawn for '" + worldName
+                                    + "': " + loc.getWorld().getName()
+                                    + " (" + (int) loc.getX() + ", " + (int) loc.getY() + ", " + (int) loc.getZ() + ")");
+                        }
+                        targetManager.loadSpawnTargets();
+                    }
+                }.runTaskLater(plugin, 10L); // wait 10 ticks (0.5s) for teleport to complete
+            }
+        }.runTaskTimer(plugin, 0L, 20L); // process one world per second
+    }
+
+    /**
      * Handle the camera player joining.
      */
     public void handleCameraPlayerJoin(Player player) {
@@ -129,7 +185,7 @@ public class CameraManager {
      * Handle a regular player joining.
      */
     public void handlePlayerJoin(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) {
+        if (config.isCameraPlayer(player.getName())) {
             handleCameraPlayerJoin(player);
             return;
         }
@@ -154,7 +210,7 @@ public class CameraManager {
      * Handle a player (regular or camera) quitting.
      */
     public void handlePlayerQuit(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) {
+        if (config.isCameraPlayer(player.getName())) {
             if (running) {
                 stop();
                 plugin.getLogger().warning("Camera player disconnected! Camera stopped.");
@@ -169,7 +225,7 @@ public class CameraManager {
      * Handle a player changing worlds.
      */
     public void handlePlayerWorldChange(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) {
+        if (config.isCameraPlayer(player.getName())) {
             // Camera itself changed world — check if it landed in a valid world
             if (running && !config.getIdleWorlds().contains(player.getWorld().getName())) {
                 Location rescue = findRescueLocation();

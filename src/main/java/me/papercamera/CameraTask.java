@@ -26,6 +26,8 @@ public class CameraTask implements Runnable {
     private int elapsedTicks;
     private Location orbitCenter;
     private double orbitAngle;
+    /** Last stable yaw, used to prevent flipping when camera is nearly vertical. */
+    private float lastStableYaw;
 
     public CameraTask(CameraManager manager, CameraConfig config, TargetManager targetManager) {
         this.manager = manager;
@@ -145,13 +147,15 @@ public class CameraTask implements Runnable {
         Location targetEye = targetLoc.clone();
         targetEye.add(0, 1.6, 0);
 
+        // Ensure camera is always above the target's eye level
+        if (idealPos.getY() <= targetEye.getY() + 0.5) {
+            idealPos.setY(targetEye.getY() + 0.5);
+        }
+
         Location adjustedPos = adjustForOcclusion(idealPos, targetEye, world);
 
-        // --- Calculate look direction ---
-        Vector toTarget = targetEye.toVector().subtract(adjustedPos.toVector());
-        if (toTarget.lengthSquared() > 0.0001) {
-            adjustedPos.setDirection(toTarget);
-        }
+        // --- Calculate stable look direction ---
+        setStableDirection(adjustedPos, targetEye);
 
         // --- Teleport ---
         try {
@@ -162,6 +166,34 @@ public class CameraTask implements Runnable {
     }
 
     /**
+     * Set the camera's yaw/pitch to look at the target, with yaw stability
+     * to prevent flipping when the camera is nearly directly above/below.
+     */
+    private void setStableDirection(Location cameraPos, Location targetEye) {
+        Vector toTarget = targetEye.toVector().subtract(cameraPos.toVector());
+        if (toTarget.lengthSquared() < 0.0001) return;
+
+        double x = toTarget.getX();
+        double y = toTarget.getY();
+        double z = toTarget.getZ();
+
+        double horizontalDist = Math.sqrt(x * x + z * z);
+        double pitch = Math.toDegrees(-Math.atan2(y, horizontalDist));
+
+        // When the camera is nearly vertical (|pitch| > 80°), yaw is unstable.
+        // Use the last stable yaw to prevent rapid flipping.
+        if (Math.abs(pitch) > 80.0) {
+            cameraPos.setYaw(lastStableYaw);
+        } else {
+            double yaw = Math.toDegrees(Math.atan2(-x, z));
+            lastStableYaw = (float) yaw;
+            cameraPos.setYaw((float) yaw);
+        }
+
+        cameraPos.setPitch((float) pitch);
+    }
+
+    /**
      * Adjust camera position to avoid blocks between camera and target.
      * Uses iterative ray-tracing to find a position with clear line of sight.
      *
@@ -169,7 +201,7 @@ public class CameraTask implements Runnable {
      * 1. Start at the ideal orbit position.
      * 2. Ray-trace from the test position to the target.
      * 3. If no occlusion → return the position (clamped to maxDistance).
-     * 4. If occluded → move the test position closer to target (just before the hit block).
+     * 4. If occluded → move the test position PAST the hit block toward target.
      * 5. Repeat until clear OR distance drops below minDistance.
      * 6. If below minDistance → try fallback positions (above, then sides).
      */
@@ -177,22 +209,19 @@ public class CameraTask implements Runnable {
         double minDist = config.getMinDistance();
         double maxDist = config.getMaxDistance();
 
-        Vector toTarget = targetEye.toVector().subtract(idealPos.toVector());
-        double distance = toTarget.length();
-        if (distance < 0.01) return idealPos;
-
-        Vector direction = toTarget.normalize();
-
         Location testPos = idealPos.clone();
         int maxIterations = 10;
 
         for (int iter = 0; iter < maxIterations; iter++) {
             double distToTarget = testPos.distance(targetEye);
+            if (distToTarget < 0.01) return testPos;
 
             if (distToTarget < minDist) {
                 // Too close to target — try fallback
                 break;
             }
+
+            Vector direction = targetEye.toVector().subtract(testPos.toVector()).normalize();
 
             RayTraceResult result = world.rayTraceBlocks(
                     testPos, direction, distToTarget,
@@ -215,8 +244,8 @@ public class CameraTask implements Runnable {
                 break;
             }
 
-            // Move camera to just before the hit point (0.5 blocks gap)
-            testPos = hitPos.clone().subtract(direction.clone().multiply(0.5));
+            // Move camera PAST the hit block toward the target (0.5 blocks past)
+            testPos = hitPos.clone().add(direction.clone().multiply(0.5));
         }
 
         // --- All attempts failed, try fallback positions ---
@@ -255,7 +284,6 @@ public class CameraTask implements Runnable {
                     FluidCollisionMode.NEVER, true
             );
             if (altResult == null || altResult.getHitBlock() == null) {
-                // Clamp max distance
                 if (altDist > maxDist) {
                     return targetEye.clone().add(altDir.clone().multiply(-maxDist));
                 }
@@ -273,7 +301,6 @@ public class CameraTask implements Runnable {
     private void switchTarget(Player camera) {
         CameraTarget newTarget = targetManager.getNextTarget();
         if (newTarget == null) {
-            // No targets available — keep orbiting last position
             if (currentTarget != null) {
                 currentTarget = null;
             }
@@ -315,6 +342,7 @@ public class CameraTask implements Runnable {
             orbitCenter = targetLoc.clone();
         }
         orbitAngle = random.nextDouble() * Math.PI * 2;
+        lastStableYaw = (float) (random.nextDouble() * 360.0);
 
         // Cross-world teleport with chunk loading
         if (targetLoc != null && !camera.getWorld().equals(targetLoc.getWorld())) {
@@ -329,9 +357,6 @@ public class CameraTask implements Runnable {
         return currentTarget;
     }
 
-    /**
-     * Find a rescue location for the camera if it's in an invalid world.
-     */
     private Location findRescueLocation() {
         for (Location loc : config.getSpawnPoints().values()) {
             if (loc.getWorld() != null && config.getIdleWorlds().contains(loc.getWorld().getName())) {

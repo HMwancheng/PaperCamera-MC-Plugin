@@ -33,7 +33,7 @@ public class TargetManager {
      * Add a player to the target pool.
      */
     public void addPlayer(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) return;
+        if (config.isCameraPlayer(player.getName())) return;
         playerTargets.add(new PlayerTarget(player));
         rebuildShufflePool();
     }
@@ -42,7 +42,7 @@ public class TargetManager {
      * Remove a player from the target pool by UUID.
      */
     public void removePlayer(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) return;
+        if (config.isCameraPlayer(player.getName())) return;
         playerTargets.removeIf(pt -> pt.getPlayerId().equals(player.getUniqueId()));
         rebuildShufflePool();
     }
@@ -53,13 +53,11 @@ public class TargetManager {
      * If they moved to an invalid world, remove them from the pool.
      */
     public void handlePlayerWorldChange(Player player) {
-        if (player.getName().equals(config.getCameraPlayerName())) return;
+        if (config.isCameraPlayer(player.getName())) return;
 
         if (config.getIdleWorlds().contains(player.getWorld().getName())) {
-            // Moved to valid world — add to pool
             addPlayer(player);
         } else {
-            // Moved to invalid world — remove from pool
             removePlayer(player);
         }
     }
