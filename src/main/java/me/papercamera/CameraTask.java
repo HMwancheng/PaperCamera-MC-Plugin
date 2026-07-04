@@ -40,8 +40,13 @@ public class CameraTask implements Runnable {
     // --- Occlusion lerp position (smoothly tracks occlusion-adjusted target) ---
     private Location adjustedCameraPos;
     private static final double OCCLUSION_LERP = 0.25; // speed of occlusion push/pull
-    private static final int RETREAT_COOLDOWN = 20; // ticks before allowing retreat (1 second)
-    private int retreatCooldown; // counts down from RETREAT_COOLDOWN
+
+    // --- Occlusion debounce: prevent flickering from brief obstacles ---
+    private static final int PUSH_THRESHOLD = 8;    // ticks of continuous push before moving
+    private static final int RETREAT_THRESHOLD = 12; // ticks of clear view before pulling back
+    private int pushTicks;    // consecutive ticks where occlusionTarget is closer than idealPos
+    private int retreatTicks; // consecutive ticks where occlusionTarget returned to idealPos
+    private Location debouncedTarget; // the actual target we lerp toward (only changes after threshold)
 
     // --- Direction smoothing (yaw/pitch) ---
     private float smoothedYaw;
@@ -158,35 +163,49 @@ public class CameraTask implements Runnable {
         }
 
         // --- Occlusion target: what adjustForOcclusion wants (may be far from idealPos) ---
-        Location occlusionTarget = adjustForOcclusion(idealPos, targetEye, world);
+        Location rawTarget = adjustForOcclusion(idealPos, targetEye, world);
 
-        // --- Retreat cooldown logic ---
-        // When the camera was pushed forward (occlusionTarget != idealPos), start a cooldown.
-        // During the cooldown, even if occlusionTarget snaps back to idealPos (gap between pillars),
-        // we hold position to avoid wobbling back and forth between closely spaced obstacles.
-        double distToTarget = occlusionTarget.distance(targetEye);
-        double idealDistToTarget = idealPos.distance(targetEye);
-        boolean wasPushedForward = (distToTarget + 0.5) < idealDistToTarget; // occlusionTarget is noticeably closer
+        // --- Debounced occlusion: don't react to brief obstacles ---
+        // rawTarget may flicker between idealPos (no obstacle) and pushedPos (obstacle).
+        // We use debouncedTarget to smooth this — it only changes after pushTicks or retreatTicks
+        // cross their respective thresholds.
+        if (debouncedTarget == null || !debouncedTarget.getWorld().equals(world)) {
+            debouncedTarget = rawTarget.clone();
+            pushTicks = 0;
+            retreatTicks = 0;
+        }
 
-        if (wasPushedForward) {
-            retreatCooldown = RETREAT_COOLDOWN;
-        } else if (retreatCooldown > 0) {
-            retreatCooldown--;
-            // During cooldown, if the ideal position is now clear, hold steady
-            if (hasClearLineOfSight(idealPos, targetEye, world)) {
-                occlusionTarget = adjustedCameraPos; // hold position, don't retreat
+        double rawDist = rawTarget.distance(targetEye);
+        double idealDist = idealPos.distance(targetEye);
+        boolean isPushed = (rawDist + 0.5) < idealDist;
+
+        if (isPushed) {
+            pushTicks++;
+            retreatTicks = 0;
+            if (pushTicks >= PUSH_THRESHOLD) {
+                // Obstacle persisted long enough — move toward rawTarget
+                debouncedTarget = rawTarget.clone();
             }
-        }
-
-        // --- Lerp adjustedCameraPos toward occlusionTarget ---
-        if (adjustedCameraPos == null || !adjustedCameraPos.getWorld().equals(world)) {
-            adjustedCameraPos = occlusionTarget.clone();
+            // else: below threshold, keep debouncedTarget unchanged (no reaction)
         } else {
-            adjustedCameraPos = lerpPosition(adjustedCameraPos, occlusionTarget, OCCLUSION_LERP);
+            retreatTicks++;
+            pushTicks = 0;
+            if (retreatTicks >= RETREAT_THRESHOLD) {
+                // Clear view persisted long enough — move back to idealPos
+                debouncedTarget = rawTarget.clone();
+            }
+            // else: below threshold, keep debouncedTarget unchanged (no reaction)
         }
 
-        // --- Check if the occlusionTarget has clear line of sight ---
-        boolean hasClearView = hasClearLineOfSight(occlusionTarget, targetEye, world);
+        // --- Lerp adjustedCameraPos toward debouncedTarget ---
+        if (adjustedCameraPos == null || !adjustedCameraPos.getWorld().equals(world)) {
+            adjustedCameraPos = debouncedTarget.clone();
+        } else {
+            adjustedCameraPos = lerpPosition(adjustedCameraPos, debouncedTarget, OCCLUSION_LERP);
+        }
+
+        // --- Check if the current position has clear line of sight ---
+        boolean hasClearView = hasClearLineOfSight(adjustedCameraPos, targetEye, world);
 
         // --- Occlusion state machine (for persistent / fully enclosed scenarios) ---
         Location desiredPos;
@@ -501,7 +520,9 @@ public class CameraTask implements Runnable {
         isTransitioning = false;
         transitionTarget = null;
         directionInitialized = false;
-        retreatCooldown = 0;
+        pushTicks = 0;
+        retreatTicks = 0;
+        debouncedTarget = null;
 
         int minTicks = config.getMinDuration() * 20;
         int maxTicks = config.getMaxDuration() * 20;

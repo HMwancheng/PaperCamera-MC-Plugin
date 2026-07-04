@@ -6,7 +6,8 @@ import java.util.*;
 
 /**
  * Manages the pool of camera targets (players + spawn points).
- * Provides random selection with no-back-to-back repeats.
+ * Uses pseudo-random shuffling: all targets are visited once before repeating,
+ * with no back-to-back repeats across shuffle cycles.
  * When players are online, non-primary spawn points appear with reduced frequency.
  */
 public class TargetManager {
@@ -17,6 +18,8 @@ public class TargetManager {
     private final List<CameraTarget> shufflePool = new ArrayList<>();
     private int shuffleIndex = 0;
     private final Random random = new Random();
+    /** Last target that was returned, to avoid back-to-back repeats. */
+    private CameraTarget lastTarget;
 
     public TargetManager(CameraConfig config) {
         this.config = config;
@@ -57,6 +60,7 @@ public class TargetManager {
 
     /**
      * Get the next target in the shuffled pool.
+     * Ensures all targets are visited once before repeating, and no back-to-back repeats.
      * Returns null if no valid targets exist.
      */
     public CameraTarget getNextTarget() {
@@ -78,6 +82,7 @@ public class TargetManager {
             return getNextTarget();
         }
 
+        lastTarget = target;
         return target;
     }
 
@@ -104,7 +109,6 @@ public class TargetManager {
         }
 
         // Add spawn targets with weighting
-        // When players are online, non-primary spawn points appear less frequently
         boolean hasPlayers = !targets.isEmpty();
         String primaryWorld = config.getPrimaryWorld();
         double weight = config.getSpawnWeight();
@@ -114,12 +118,10 @@ public class TargetManager {
                     || (st.getWorld() != null && st.getWorld().getName().equals(primaryWorld));
 
             if (hasPlayers && !isPrimary) {
-                // Non-primary spawn: only add if random < weight
                 if (random.nextDouble() < weight) {
                     targets.add(st);
                 }
             } else {
-                // Primary spawn or no players: always add
                 targets.add(st);
             }
         }
@@ -127,10 +129,53 @@ public class TargetManager {
         return targets;
     }
 
+    /**
+     * Rebuild the shuffle pool with Fisher-Yates shuffle.
+     * Ensures the first element is not the same as lastTarget (no back-to-back repeats).
+     * Only enforces this when there are at least 2 targets.
+     */
     private void rebuildShufflePool() {
+        List<CameraTarget> valid = buildValidTargets();
+        int n = valid.size();
+
         shufflePool.clear();
-        shufflePool.addAll(buildValidTargets());
-        Collections.shuffle(shufflePool, random);
+        shufflePool.addAll(valid);
+
+        if (n <= 1) {
+            shuffleIndex = 0;
+            return;
+        }
+
+        // Fisher-Yates shuffle
+        for (int i = n - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            Collections.swap(shufflePool, i, j);
+        }
+
+        // Avoid back-to-back repeat: if first element matches lastTarget, swap with another
+        if (lastTarget != null && n >= 2) {
+            CameraTarget first = shufflePool.get(0);
+            if (isSameTarget(first, lastTarget)) {
+                // Swap with a random position from 1..n-1
+                int swapIdx = 1 + random.nextInt(n - 1);
+                Collections.swap(shufflePool, 0, swapIdx);
+            }
+        }
+
         shuffleIndex = 0;
+    }
+
+    /**
+     * Check if two targets refer to the same entity.
+     */
+    private boolean isSameTarget(CameraTarget a, CameraTarget b) {
+        if (a == null || b == null) return false;
+        if (a instanceof PlayerTarget && b instanceof PlayerTarget) {
+            return ((PlayerTarget) a).getPlayerId().equals(((PlayerTarget) b).getPlayerId());
+        }
+        if (a instanceof LocationTarget && b instanceof LocationTarget) {
+            return a.getName().equals(b.getName());
+        }
+        return false;
     }
 }
