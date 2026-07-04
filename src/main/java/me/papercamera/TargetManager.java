@@ -30,7 +30,7 @@ public class TargetManager {
     }
 
     /**
-     * Add a player to the target pool.
+     * Add a player to the target pool (any world, including nether/end).
      */
     public void addPlayer(Player player) {
         if (config.isCameraPlayer(player.getName())) return;
@@ -49,17 +49,12 @@ public class TargetManager {
 
     /**
      * Handle a player changing worlds.
-     * If they moved to a valid world, ensure they're in the pool.
-     * If they moved to an invalid world, remove them from the pool.
+     * Players are always kept in the pool regardless of world.
      */
     public void handlePlayerWorldChange(Player player) {
         if (config.isCameraPlayer(player.getName())) return;
-
-        if (config.getIdleWorlds().contains(player.getWorld().getName())) {
-            addPlayer(player);
-        } else {
-            removePlayer(player);
-        }
+        // Always keep the player in the pool — they can be followed anywhere
+        // No need to add/remove based on world
     }
 
     /**
@@ -97,26 +92,19 @@ public class TargetManager {
     }
 
     /**
-     * Get the number of valid player targets in valid worlds.
+     * Get the number of valid online player targets.
      */
     public int getPlayerCount() {
         playerTargets.removeIf(pt -> !pt.isValid());
-        int count = 0;
-        for (PlayerTarget pt : playerTargets) {
-            if (pt.getWorld() != null && config.getIdleWorlds().contains(pt.getWorld().getName())) {
-                count++;
-            }
-        }
-        return count;
+        return playerTargets.size();
     }
 
     private List<CameraTarget> buildValidTargets() {
         List<CameraTarget> targets = new ArrayList<>();
 
-        // Add valid player targets in configured worlds
+        // Add all valid player targets (any world, including nether/end)
         for (PlayerTarget pt : playerTargets) {
-            if (pt.isValid() && pt.getWorld() != null
-                    && config.getIdleWorlds().contains(pt.getWorld().getName())) {
+            if (pt.isValid()) {
                 targets.add(pt);
             }
         }

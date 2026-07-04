@@ -48,16 +48,6 @@ public class CameraManager {
             camera.setGameMode(GameMode.SPECTATOR);
         }
 
-        // Ensure camera is in a valid world
-        if (!config.getIdleWorlds().contains(camera.getWorld().getName())) {
-            Location rescue = findRescueLocation();
-            if (rescue != null) {
-                ensureChunkLoaded(rescue);
-                camera.teleport(rescue);
-                plugin.getLogger().info("Camera was in invalid world, teleported to rescue location.");
-            }
-        }
-
         cameraTask = new CameraTask(this, config, targetManager);
         bukkitTask = Bukkit.getScheduler().runTaskTimer(plugin, cameraTask, 0L, 1L);
         running = true;
@@ -195,8 +185,7 @@ public class CameraManager {
         // If camera is running and currently on a spawn point, switch to the new player immediately
         if (running && cameraTask != null) {
             CameraTarget current = cameraTask.getCurrentTarget();
-            if ((current == null || current instanceof LocationTarget)
-                    && config.getIdleWorlds().contains(player.getWorld().getName())) {
+            if (current == null || current instanceof LocationTarget) {
                 Player camera = getCameraPlayer();
                 if (camera != null && camera.isOnline()) {
                     cameraTask.forceSwitch(camera, new PlayerTarget(player));
@@ -226,15 +215,7 @@ public class CameraManager {
      */
     public void handlePlayerWorldChange(Player player) {
         if (config.isCameraPlayer(player.getName())) {
-            // Camera itself changed world — check if it landed in a valid world
-            if (running && !config.getIdleWorlds().contains(player.getWorld().getName())) {
-                Location rescue = findRescueLocation();
-                if (rescue != null) {
-                    ensureChunkLoaded(rescue);
-                    player.teleport(rescue);
-                    plugin.getLogger().warning("Camera entered invalid world, teleported back.");
-                }
-            }
+            // Camera itself changed world — no restriction, allow following players anywhere
             return;
         }
 
@@ -254,21 +235,4 @@ public class CameraManager {
         }
     }
 
-    /**
-     * Find a rescue location (first available spawn point in a valid world).
-     */
-    private Location findRescueLocation() {
-        for (Location loc : config.getSpawnPoints().values()) {
-            if (loc.getWorld() != null && config.getIdleWorlds().contains(loc.getWorld().getName())) {
-                return loc.clone();
-            }
-        }
-        // Last resort: first loaded world
-        for (World world : Bukkit.getWorlds()) {
-            if (config.getIdleWorlds().contains(world.getName())) {
-                return world.getSpawnLocation();
-            }
-        }
-        return null;
-    }
 }

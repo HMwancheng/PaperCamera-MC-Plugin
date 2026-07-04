@@ -37,11 +37,11 @@ camera-smoothing:
   lerp-factor: 0.35  # 摄像机实际位置跟随理想位置的速度（0.0-1.0）
   direction-lerp-factor: 0.20  # 视角（yaw/pitch）平滑速度，越小越平滑（0.0-1.0），用于过滤跳跃等快速移动
 
-# 摄像机可操作的世界（只在这些世界活动，不进入下界/末地）
+# 出生点世界列表（只在这些世界生成出生点/主城用于无人时环绕）
+# 配置后，spawn-points 中非此列表的世界会被自动跳过
+# 摄像机可以跟随玩家进入任何世界（包括下界/末地），不受此列表限制
 idle-worlds:
   - "world"
-  - "world2"
-  - "world3"
 
 # 出生点发现命令（可选）
 # 如果设置了此命令，插件会执行 "{命令前缀} {世界名}" 来传送到各世界的出生点
@@ -51,19 +51,10 @@ spawn-command: ""
 
 # 手动配置的出生点（当 spawn-command 为空时使用）
 # 摄像机在无人时会环绕这些坐标
+# 注意：世界名必须和服务器实际世界名一致，且必须在 idle-worlds 列表中
 spawn-points:
   world:
     world: "world"
-    x: 0.0
-    y: 64.0
-    z: 0.0
-  world2:
-    world: "world2"
-    x: 0.0
-    y: 64.0
-    z: 0.0
-  world3:
-    world: "world3"
     x: 0.0
     y: 64.0
     z: 0.0

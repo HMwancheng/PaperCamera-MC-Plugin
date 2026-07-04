@@ -72,6 +72,8 @@ public class CameraConfig {
         cameraSmoothingLerp = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.lerp-factor", 0.35)));
         directionLerpFactor = Math.max(0.01, Math.min(1.0, cfg.getDouble("camera-smoothing.direction-lerp-factor", 0.20)));
         idleWorlds = cfg.getStringList("idle-worlds");
+        // Filter out empty strings from idle-worlds
+        idleWorlds.removeIf(String::isEmpty);
         spawnCommand = cfg.getString("spawn-command", "");
 
         // Validate durations
@@ -99,9 +101,14 @@ public class CameraConfig {
                     plugin.getLogger().warning("Spawn point '" + key + "' missing world name, skipping.");
                     continue;
                 }
+                // Only load spawn points for worlds in the idle-worlds list
+                if (!idleWorlds.contains(worldName)) {
+                    plugin.getLogger().info("Spawn point '" + key + "' world '" + worldName + "' not in idle-worlds, skipping.");
+                    continue;
+                }
                 World world = Bukkit.getWorld(worldName);
                 if (world == null) {
-                    plugin.getLogger().warning("World '" + worldName + "' not found for spawn point '" + key + "', skipping.");
+                    plugin.getLogger().warning("World '" + worldName + "' not loaded yet for spawn point '" + key + "'. It will be available when the world loads.");
                     continue;
                 }
                 double x = cfg.getDouble("spawn-points." + key + ".x", 0.0);
@@ -111,7 +118,7 @@ public class CameraConfig {
             }
         }
 
-        plugin.getLogger().info("Loaded " + spawnPoints.size() + " spawn points across " + idleWorlds.size() + " configured worlds.");
+        plugin.getLogger().info("Loaded " + spawnPoints.size() + " spawn points. Idle worlds: " + idleWorlds);
     }
 
     /**

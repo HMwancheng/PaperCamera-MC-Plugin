@@ -65,16 +65,6 @@ public class CameraTask implements Runnable {
             camera.setGameMode(GameMode.SPECTATOR);
         }
 
-        // --- Enforce valid world ---
-        if (!config.getIdleWorlds().contains(camera.getWorld().getName())) {
-            Location rescue = findRescueLocation();
-            if (rescue != null) {
-                manager.ensureChunkLoaded(rescue);
-                try { camera.teleport(rescue); } catch (Exception ignored) {}
-            }
-            return;
-        }
-
         // --- Initialize camera position for smoothing ---
         if (cameraPos == null || !cameraPos.getWorld().equals(camera.getWorld())) {
             cameraPos = camera.getLocation().clone();
@@ -103,13 +93,6 @@ public class CameraTask implements Runnable {
             try { camera.teleport(targetLoc); } catch (Exception ignored) {}
             orbitCenter = targetLoc.clone();
             cameraPos = targetLoc.clone();
-            return;
-        }
-
-        // --- Target world check ---
-        if (currentTarget instanceof PlayerTarget
-                && !config.getIdleWorlds().contains(currentTarget.getWorld().getName())) {
-            switchTarget(camera);
             return;
         }
 
@@ -481,19 +464,5 @@ public class CameraTask implements Runnable {
 
     public CameraTarget getCurrentTarget() {
         return currentTarget;
-    }
-
-    private Location findRescueLocation() {
-        for (Location loc : config.getSpawnPoints().values()) {
-            if (loc.getWorld() != null && config.getIdleWorlds().contains(loc.getWorld().getName())) {
-                return loc.clone();
-            }
-        }
-        for (World world : org.bukkit.Bukkit.getWorlds()) {
-            if (config.getIdleWorlds().contains(world.getName())) {
-                return world.getSpawnLocation();
-            }
-        }
-        return null;
     }
 }
