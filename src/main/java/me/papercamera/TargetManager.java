@@ -67,19 +67,31 @@ public class TargetManager {
         // Clean up invalid targets
         playerTargets.removeIf(pt -> !pt.isValid());
 
-        List<CameraTarget> valid = buildValidTargets();
-        if (valid.isEmpty()) return null;
-
+        // Rebuild the shuffle pool if needed. buildValidTargets() is called exactly once
+        // inside rebuildShufflePool() to avoid consuming random numbers twice (which would
+        // cause the spawn-weight check to differ between the validity check and the actual pool).
         if (shufflePool.isEmpty() || shuffleIndex >= shufflePool.size()) {
             rebuildShufflePool();
         }
 
         if (shufflePool.isEmpty()) return null;
 
-        CameraTarget target = shufflePool.get(shuffleIndex++);
+        // Advance to next target, skipping invalid ones
+        CameraTarget target = null;
+        while (shuffleIndex < shufflePool.size()) {
+            CameraTarget candidate = shufflePool.get(shuffleIndex++);
+            if (candidate.isValid()) {
+                target = candidate;
+                break;
+            }
+        }
 
-        if (!target.isValid()) {
-            return getNextTarget();
+        // If we exhausted the pool without finding a valid target, rebuild and try again
+        if (target == null) {
+            rebuildShufflePool();
+            if (shufflePool.isEmpty()) return null;
+            target = shufflePool.get(shuffleIndex++);
+            if (!target.isValid()) return null;
         }
 
         lastTarget = target;
