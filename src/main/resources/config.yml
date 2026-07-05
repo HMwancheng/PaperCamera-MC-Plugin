@@ -26,6 +26,7 @@ follow:
   max-duration: 30     # 每个目标最多停留秒数
   lerp-factor: 0.03    # 摄像机中心跟随目标的速度（0.0-1.0，越小越平滑）
   max-move-per-tick: 0.15  # 每 tick 摄像机中心最大移动格数（速度上限）
+  teleport-threshold: 60.0  # 摄像机距离目标超过此值（格）时直接传送，避免跑步追赶导致大量区块加载
 
 # 遮挡检测设置
 occlusion:

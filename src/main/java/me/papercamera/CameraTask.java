@@ -117,6 +117,28 @@ public class CameraTask implements Runnable {
             orbitCenter = targetLoc.clone();
         }
 
+        // --- Teleport threshold: if camera is too far from target, snap directly ---
+        // This prevents the camera from chasing a player across long distances,
+        // which would cause massive chunk loading and server lag.
+        double distToTarget = orbitCenter.distance(targetLoc);
+        if (distToTarget > config.getTeleportThreshold()) {
+            manager.getLogger().info("Target '" + currentTarget.getName()
+                    + "' is " + (int) distToTarget + " blocks away (> "
+                    + (int) config.getTeleportThreshold() + "), teleporting directly.");
+            orbitCenter = targetLoc.clone();
+            // Also reset camera position to the target's orbit start
+            Location startPos = findClearOrbitStart(targetLoc);
+            if (startPos != null) {
+                cameraPos = startPos.clone();
+                adjustedCameraPos = startPos.clone();
+                try { camera.teleport(startPos); } catch (Exception ignored) {}
+            } else {
+                cameraPos = targetLoc.clone();
+                adjustedCameraPos = targetLoc.clone();
+            }
+            return;
+        }
+
         // --- Lerp orbit center toward target (with speed cap) ---
         lerpOrbitCenter(targetLoc);
 

@@ -27,6 +27,7 @@ public class CameraConfig {
     private int maxDuration;
     private double lerpFactor;
     private double maxMovePerTick;
+    private double teleportThreshold;
     private double minDistance;
     private double maxDistance;
     private int occlusionTimeoutTicks;
@@ -68,6 +69,7 @@ public class CameraConfig {
         maxDuration = cfg.getInt("follow.max-duration", 30);
         lerpFactor = Math.max(0.0, Math.min(1.0, cfg.getDouble("follow.lerp-factor", 0.05)));
         maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.25));
+        teleportThreshold = Math.max(1.0, cfg.getDouble("follow.teleport-threshold", 60.0));
         minDistance = cfg.getDouble("occlusion.min-distance", 3.5);
         maxDistance = cfg.getDouble("occlusion.max-distance", 24.0);
         occlusionTimeoutTicks = Math.max(0, cfg.getInt("occlusion.timeout-ticks", 40));
@@ -195,6 +197,7 @@ public class CameraConfig {
     public int getMaxDuration() { return maxDuration; }
     public double getLerpFactor() { return lerpFactor; }
     public double getMaxMovePerTick() { return maxMovePerTick; }
+    public double getTeleportThreshold() { return teleportThreshold; }
     public double getMinDistance() { return minDistance; }
     public double getMaxDistance() { return maxDistance; }
     public int getOcclusionTimeoutTicks() { return occlusionTimeoutTicks; }
