@@ -123,13 +123,15 @@ public class TargetManager {
         // Add spawn targets with weighting
         boolean hasPlayers = !targets.isEmpty();
         String primaryWorld = config.getPrimaryWorld();
-        double weight = config.getSpawnWeight();
+        double nonPrimaryWeight = config.getSpawnWeight();
+        double primaryWeight = config.getPrimarySpawnWeight();
 
         for (LocationTarget st : spawnTargets) {
             boolean isPrimary = st.getName().equals(primaryWorld)
                     || (st.getWorld() != null && st.getWorld().getName().equals(primaryWorld));
 
-            if (hasPlayers && !isPrimary) {
+            if (hasPlayers) {
+                double weight = isPrimary ? primaryWeight : nonPrimaryWeight;
                 if (random.nextDouble() < weight) {
                     targets.add(st);
                 }

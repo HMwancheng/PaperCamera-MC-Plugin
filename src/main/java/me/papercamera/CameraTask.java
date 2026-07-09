@@ -8,7 +8,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 /**
  * The main per-tick camera logic.
@@ -58,6 +61,12 @@ public class CameraTask implements Runnable {
     private boolean isTransitioning;
     private Location transitionTarget;
 
+    // --- Cross-world teleport guard ---
+    private boolean pendingTeleport;
+
+    // --- Active player tracking ---
+    private final Map<UUID, Location> lastPlayerLocations = new HashMap<>();
+
     public CameraTask(CameraManager manager, CameraConfig config, TargetManager targetManager) {
         this.manager = manager;
         this.config = config;
@@ -97,22 +106,35 @@ public class CameraTask implements Runnable {
 
         elapsedTicks++;
 
+        // --- Track current player's position for activity detection ---
+        if (currentTarget instanceof PlayerTarget pt) {
+            Location loc = pt.getLocation();
+            if (loc != null) {
+                lastPlayerLocations.put(pt.getPlayerId(), loc.clone());
+            }
+        }
+
         Location targetLoc = currentTarget.getLocation();
         if (targetLoc == null) return;
 
         // --- Cross-world check ---
         if (!camera.getWorld().equals(targetLoc.getWorld())) {
-            if (currentTarget instanceof LocationTarget) {
-                manager.teleportCameraToWorld(targetLoc.getWorld().getName());
-            } else {
-                manager.ensureChunkLoaded(targetLoc);
-                try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+            if (!pendingTeleport) {
+                if (currentTarget instanceof LocationTarget) {
+                    manager.teleportCameraToWorld(targetLoc.getWorld().getName());
+                } else {
+                    manager.ensureChunkLoaded(targetLoc);
+                    try { camera.teleport(targetLoc); } catch (Exception ignored) {}
+                }
+                pendingTeleport = true;
             }
             orbitCenter = targetLoc.clone();
             cameraPos = targetLoc.clone();
             adjustedCameraPos = targetLoc.clone();
             return;
         }
+        // Reset pending flag once camera is in the expected world
+        pendingTeleport = false;
         if (orbitCenter == null || !orbitCenter.getWorld().equals(targetLoc.getWorld())) {
             orbitCenter = targetLoc.clone();
         }
@@ -519,10 +541,31 @@ public class CameraTask implements Runnable {
         pushTicks = 0;
         retreatTicks = 0;
         debouncedTarget = null;
+        pendingTeleport = false;
 
         int minTicks = config.getMinDuration() * 20;
         int maxTicks = config.getMaxDuration() * 20;
         targetDurationTicks = minTicks + random.nextInt(Math.max(1, maxTicks - minTicks + 1));
+
+        // --- Active player duration bonus ---
+        // If the target is a player and they have moved since we last saw them,
+        // extend the duration by the configured bonus factor.
+        if (target instanceof PlayerTarget pt) {
+            Location lastLoc = lastPlayerLocations.get(pt.getPlayerId());
+            Location currentLoc = pt.getLocation();
+            if (lastLoc != null && currentLoc != null
+                    && lastLoc.getWorld() != null
+                    && lastLoc.getWorld().equals(currentLoc.getWorld())) {
+                double moved = lastLoc.distance(currentLoc);
+                if (moved > 0.5) {
+                    double bonus = config.getActivePlayerDurationBonus();
+                    targetDurationTicks = (int) (targetDurationTicks * (1.0 + bonus));
+                    manager.getLogger().info("Player '" + target.getName()
+                            + "' is active (moved " + String.format("%.1f", moved)
+                            + " blocks), duration bonus: " + (targetDurationTicks / 20) + "s");
+                }
+            }
+        }
 
         orbitAngle = random.nextDouble() * Math.PI * 2;
         lastStableYaw = (float) (random.nextDouble() * 360.0);

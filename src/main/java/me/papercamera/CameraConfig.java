@@ -13,7 +13,7 @@ import java.util.*;
 
 public class CameraConfig {
 
-    private static final int CURRENT_CONFIG_VERSION = 4;
+    private static final int CURRENT_CONFIG_VERSION = 5;
 
     private final JavaPlugin plugin;
 
@@ -28,6 +28,7 @@ public class CameraConfig {
     private double lerpFactor;
     private double maxMovePerTick;
     private double teleportThreshold;
+    private double activePlayerDurationBonus;
     private double minDistance;
     private double maxDistance;
     private int occlusionTimeoutTicks;
@@ -38,6 +39,7 @@ public class CameraConfig {
     private List<String> idleWorlds;
     private String primaryWorld;
     private double spawnWeight;
+    private double primarySpawnWeight;
     private String spawnCommand;
     private final Map<String, Location> spawnPoints = new LinkedHashMap<>();
 
@@ -70,6 +72,7 @@ public class CameraConfig {
         lerpFactor = Math.max(0.0, Math.min(1.0, cfg.getDouble("follow.lerp-factor", 0.05)));
         maxMovePerTick = Math.max(0.01, cfg.getDouble("follow.max-move-per-tick", 0.25));
         teleportThreshold = Math.max(1.0, cfg.getDouble("follow.teleport-threshold", 60.0));
+        activePlayerDurationBonus = Math.max(0.0, cfg.getDouble("follow.active-player-duration-bonus", 0.5));
         minDistance = cfg.getDouble("occlusion.min-distance", 3.5);
         maxDistance = cfg.getDouble("occlusion.max-distance", 24.0);
         occlusionTimeoutTicks = Math.max(0, cfg.getInt("occlusion.timeout-ticks", 40));
@@ -85,6 +88,7 @@ public class CameraConfig {
             primaryWorld = idleWorlds.get(0);
         }
         spawnWeight = Math.max(0.0, Math.min(1.0, cfg.getDouble("spawn-weight", 0.3)));
+        primarySpawnWeight = Math.max(0.0, Math.min(1.0, cfg.getDouble("primary-spawn-weight", 0.5)));
         spawnCommand = cfg.getString("spawn-command", "");
 
         // Validate durations
@@ -198,6 +202,7 @@ public class CameraConfig {
     public double getLerpFactor() { return lerpFactor; }
     public double getMaxMovePerTick() { return maxMovePerTick; }
     public double getTeleportThreshold() { return teleportThreshold; }
+    public double getActivePlayerDurationBonus() { return activePlayerDurationBonus; }
     public double getMinDistance() { return minDistance; }
     public double getMaxDistance() { return maxDistance; }
     public int getOcclusionTimeoutTicks() { return occlusionTimeoutTicks; }
@@ -208,6 +213,7 @@ public class CameraConfig {
     public List<String> getIdleWorlds() { return idleWorlds; }
     public String getPrimaryWorld() { return primaryWorld; }
     public double getSpawnWeight() { return spawnWeight; }
+    public double getPrimarySpawnWeight() { return primarySpawnWeight; }
     public String getSpawnCommand() { return spawnCommand; }
     public Map<String, Location> getSpawnPoints() { return spawnPoints; }
 }
